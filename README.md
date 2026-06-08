@@ -4,15 +4,29 @@ A Next.js app for uploading MP3 audio and transcribing it to text. Supports **on
 
 ## Features
 
+- **Model explorer home page** — choose between transcription backends before uploading
+- **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
 - MP3 file picker with `accept="audio/mpeg,.mp3"`
 - Client-side validation for file type and size
-- **Two transcription modes:**
+- **Two transcription models:**
   - **On device** — Whisper Tiny in the browser (private, max **5 MB**)
   - **Server (OpenAI)** — upload to API route, transcribed by OpenAI (max **1 MB**)
 - Background model preload in on-device mode
 - Progress bars for model download, upload, decode, and transcription
 - Web Worker inference for on-device mode
 - Clear button resets file and transcript (keeps loaded browser model in memory)
+- Reusable UI primitives (`Card`, `Button`, `ProgressBar`, etc.) shared across pages
+
+## Routes
+
+| Route | Description |
+| ----- | ----------- |
+| `/` | Home — model explorer with links to each backend |
+| `/transcribe/on-device` | Whisper Tiny in-browser transcription |
+| `/transcribe/server` | OpenAI Whisper API transcription |
+| `POST /api/transcribe` | Server API route (used by server mode) |
+
+Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 
 ## Tech stack
 
@@ -45,7 +59,7 @@ npm install
 Copy the environment template and add your OpenAI key (required for server mode):
 
 ```bash
-cp .env.example .env.local
+cp env.example .env.local
 ```
 
 Set in `.env.local`:
@@ -66,7 +80,7 @@ If the worker fails to bundle under Turbopack, use webpack instead:
 npm run dev:webpack
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a model from the home page, then upload and transcribe an MP3 on its dedicated route.
 
 ## Scripts
 
@@ -83,34 +97,43 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```
 src/
 ├── app/
-│   ├── api/transcribe/route.ts # OpenAI Whisper API (server mode)
+│   ├── api/transcribe/route.ts     # OpenAI Whisper API (server mode)
+│   ├── transcribe/[mode]/page.tsx  # Per-model info + upload UI
 │   ├── layout.tsx
-│   ├── page.tsx
+│   ├── page.tsx                    # Home — model explorer
 │   └── globals.css
 ├── components/
-│   └── UploadMp3.tsx           # Upload UI, mode toggle, progress bars
+│   ├── ui/                         # Shared primitives (Card, Button, ProgressBar, …)
+│   ├── BackLink.tsx
+│   ├── ModelCard.tsx               # Home-page model card
+│   ├── ModelInfo.tsx               # Capabilities, pros, cons
+│   └── TranscriptionUploader.tsx   # Upload UI and progress (mode prop)
 ├── hooks/
 │   ├── useWhisperTranscription.ts  # On-device worker transcription
 │   └── useServerTranscription.ts   # Server upload + API call
 ├── lib/
 │   ├── audio.ts
-│   ├── upload-constants.ts     # Upload limits per mode
-│   ├── validate-mp3.ts         # Shared MP3 validation
+│   ├── format-bytes.ts
+│   ├── models.ts                   # Model metadata, routes, and config
+│   ├── upload-constants.ts         # Upload limits per mode
+│   ├── validate-mp3.ts             # Shared MP3 validation
 │   └── whisper-types.ts
 └── workers/
     └── whisper.worker.ts
 ```
 
-## Transcription modes
+Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`src/lib/models.ts`](src/lib/models.ts). Adding a third model is config-driven: extend `MODELS` and the corresponding hook/uploader wiring.
 
-### On device (default)
+## Transcription models
+
+### On device (`/transcribe/on-device`)
 
 - Uses `Xenova/whisper-tiny` in a Web Worker
 - Model preloads on page load
 - Audio stays in the browser; only model weights are downloaded from Hugging Face (~40 MB, cached after first use)
 - Max file size: **5 MB**
 
-### Server (OpenAI)
+### Server / OpenAI (`/transcribe/server`)
 
 - Uploads MP3 to `POST /api/transcribe`
 - Server calls OpenAI `whisper-1` and returns `{ text }`
