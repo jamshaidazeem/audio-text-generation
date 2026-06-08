@@ -13,12 +13,14 @@ export type TranscriptionStatus =
   | "done"
   | "error";
 
-export function useWhisperTranscription() {
+export function useWhisperTranscription(enabled = true) {
   const workerRef = useRef<Worker | null>(null);
   const isTranscribingRef = useRef(false);
-  const modelStatusRef = useRef<ModelStatus>("loading");
+  const modelStatusRef = useRef<ModelStatus>(enabled ? "loading" : "ready");
 
-  const [modelStatus, setModelStatus] = useState<ModelStatus>("loading");
+  const [modelStatus, setModelStatus] = useState<ModelStatus>(
+    enabled ? "loading" : "ready",
+  );
   const [status, setStatus] = useState<TranscriptionStatus>("idle");
   const [modelProgress, setModelProgress] = useState(0);
   const [transcriptionProgress, setTranscriptionProgress] = useState(0);
@@ -150,6 +152,10 @@ export function useWhisperTranscription() {
   );
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const worker = getWorker();
     worker.addEventListener("message", handleWorkerMessage);
     worker.postMessage({ type: "preload" });
@@ -158,8 +164,11 @@ export function useWhisperTranscription() {
       worker.removeEventListener("message", handleWorkerMessage);
       worker.terminate();
       workerRef.current = null;
+      modelStatusRef.current = "loading";
+      setModelStatus("loading");
+      setModelProgress(0);
     };
-  }, [getWorker, handleWorkerMessage]);
+  }, [enabled, getWorker, handleWorkerMessage]);
 
   return {
     modelStatus,
@@ -170,8 +179,8 @@ export function useWhisperTranscription() {
     transcript,
     error,
     isBusy,
-    isModelReady: modelStatus === "ready",
-    isModelLoading: modelStatus === "loading",
+    isModelReady: enabled && modelStatus === "ready",
+    isModelLoading: enabled && modelStatus === "loading",
     transcribe,
     reset,
   };

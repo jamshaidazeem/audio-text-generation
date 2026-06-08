@@ -10,9 +10,9 @@ export default function Home() {
               Audio → Text (starter)
             </h1>
             <p className="mt-2 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              Upload an MP3 and transcribe it on your device using Whisper Tiny.
-              Audio stays in your browser; only model weights are downloaded on
-              first use.
+              Upload an MP3 and transcribe it on your device with Whisper Tiny,
+              or use server mode to send audio to OpenAI. On-device mode keeps
+              audio in your browser; server mode requires an API key.
             </p>
           </header>
 

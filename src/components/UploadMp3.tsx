@@ -2,11 +2,16 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { useServerTranscription } from "@/hooks/useServerTranscription";
 import { useWhisperTranscription } from "@/hooks/useWhisperTranscription";
 import {
+  MAX_SERVER_UPLOAD_BYTES,
+  MAX_SERVER_UPLOAD_LABEL,
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_LABEL,
+  type TranscriptionMode,
 } from "@/lib/upload-constants";
+import { getExtension, validateMp3File } from "@/lib/validate-mp3";
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
@@ -22,19 +27,6 @@ function formatBytes(bytes: number): string {
   }
 
   return `${value.toFixed(value < 10 ? 2 : 1)} ${units[unitIndex]}`;
-}
-
-function getExtension(filename: string): string {
-  const lastDot = filename.lastIndexOf(".");
-  if (lastDot <= 0 || lastDot === filename.length - 1) return "";
-  return filename.slice(lastDot + 1).toLowerCase();
-}
-
-function isProbablyMp3(file: File): boolean {
-  const ext = getExtension(file.name);
-  if (ext === "mp3") return true;
-  if (file.type && file.type.toLowerCase() === "audio/mpeg") return true;
-  return false;
 }
 
 function ProgressBar({
@@ -58,21 +50,17 @@ function ProgressBar({
 
 export function UploadMp3() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const [mode, setMode] = useState<TranscriptionMode>("browser");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const {
-    status,
-    modelProgress,
-    transcriptionProgress,
-    progressLabel,
-    transcript,
-    error: transcriptionError,
-    isBusy,
-    isModelLoading,
-    transcribe,
-    reset: resetTranscription,
-  } = useWhisperTranscription();
+  const browserEnabled = mode === "browser";
+  const maxLabel = browserEnabled ? MAX_UPLOAD_LABEL : MAX_SERVER_UPLOAD_LABEL;
+
+  const browser = useWhisperTranscription(browserEnabled);
+  const server = useServerTranscription();
+
+  const active = browserEnabled ? browser : server;
 
   const details = useMemo(() => {
     if (!file) return null;
@@ -84,11 +72,22 @@ export function UploadMp3() {
     };
   }, [file]);
 
+  function resetTranscriptionState() {
+    browser.reset();
+    server.reset();
+  }
+
   function clearSelection(message?: string) {
     setFile(null);
     setError(message ?? null);
-    resetTranscription();
+    resetTranscriptionState();
     if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function validateSelectedFile(selected: File, activeMode: TranscriptionMode) {
+    const limit =
+      activeMode === "browser" ? MAX_UPLOAD_BYTES : MAX_SERVER_UPLOAD_BYTES;
+    return validateMp3File(selected, limit);
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -98,32 +97,56 @@ export function UploadMp3() {
       return;
     }
 
-    if (!isProbablyMp3(selected)) {
-      clearSelection("Please choose an .mp3 file.");
+    const validationError = validateSelectedFile(selected, mode);
+    if (validationError) {
+      clearSelection(validationError);
       return;
     }
 
-    if (selected.size > MAX_UPLOAD_BYTES) {
-      clearSelection(
-        `File is too large. Max size is ${formatBytes(MAX_UPLOAD_BYTES)} (${MAX_UPLOAD_LABEL}).`,
-      );
-      return;
-    }
-
-    resetTranscription();
+    resetTranscriptionState();
     setFile(selected);
     setError(null);
   }
 
-  async function onTranscribe() {
-    if (!file || isBusy) return;
-    await transcribe(file);
+  function onModeChange(nextMode: TranscriptionMode) {
+    if (active.isBusy) return;
+
+    setMode(nextMode);
+    setError(null);
+    resetTranscriptionState();
+
+    if (file) {
+      const validationError = validateSelectedFile(file, nextMode);
+      if (validationError) {
+        setFile(null);
+        setError(validationError);
+        if (inputRef.current) inputRef.current.value = "";
+      }
+    }
   }
 
-  const displayError = error ?? transcriptionError;
-  const showBackgroundModelProgress = isModelLoading && !isBusy;
-  const showModelProgress = status === "loading_model";
-  const showTranscriptionProgress = status === "transcribing";
+  async function onTranscribe() {
+    if (!file || active.isBusy) return;
+
+    if (browserEnabled) {
+      await browser.transcribe(file);
+    } else {
+      await server.transcribe(file);
+    }
+  }
+
+  const displayError = error ?? active.error;
+  const transcript = active.transcript;
+  const isBusy = active.isBusy;
+  const progressLabel = active.progressLabel;
+
+  const showBackgroundModelProgress =
+    browserEnabled && browser.isModelLoading && !browser.isBusy;
+
+  const showBrowserActiveProgress =
+    browserEnabled && browser.isBusy && progressLabel;
+
+  const showServerActiveProgress = !browserEnabled && server.isBusy && progressLabel;
 
   return (
     <section className="w-full rounded-2xl border border-black/8 bg-white p-6 shadow-sm dark:border-white/[.145] dark:bg-black">
@@ -132,9 +155,52 @@ export function UploadMp3() {
       </h2>
       <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
         Choose a single <span className="font-medium">.mp3</span> file (max{" "}
-        <span className="font-medium">{MAX_UPLOAD_LABEL}</span>), then transcribe
-        it on your device with Whisper Tiny.
+        <span className="font-medium">{maxLabel}</span> in{" "}
+        {browserEnabled ? "on-device" : "server"} mode), then transcribe it.
       </p>
+
+      <fieldset className="mt-4" disabled={isBusy}>
+        <legend className="sr-only">Transcription mode</legend>
+        <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-black/8 px-3 py-2 text-sm dark:border-white/[.145]">
+            <input
+              type="radio"
+              name="transcription-mode"
+              value="browser"
+              checked={mode === "browser"}
+              onChange={() => onModeChange("browser")}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-black dark:text-zinc-50">
+                On device
+              </span>
+              <span className="mt-0.5 block text-zinc-600 dark:text-zinc-400">
+                Whisper Tiny in your browser. Audio stays on your device.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-black/8 px-3 py-2 text-sm dark:border-white/[.145]">
+            <input
+              type="radio"
+              name="transcription-mode"
+              value="server"
+              checked={mode === "server"}
+              onChange={() => onModeChange("server")}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="font-medium text-black dark:text-zinc-50">
+                Server (OpenAI)
+              </span>
+              <span className="mt-0.5 block text-zinc-600 dark:text-zinc-400">
+                Audio is uploaded to your server, then sent to OpenAI.
+              </span>
+            </span>
+          </label>
+        </div>
+      </fieldset>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
@@ -178,61 +244,100 @@ export function UploadMp3() {
                 Model download
               </span>
               <span className="font-medium text-black dark:text-zinc-50">
-                {modelProgress > 0 ? `${modelProgress}%` : "Starting…"}
+                {browser.modelProgress > 0
+                  ? `${browser.modelProgress}%`
+                  : "Starting…"}
               </span>
             </div>
             <ProgressBar
-              value={modelProgress}
-              indeterminate={modelProgress === 0}
+              value={browser.modelProgress}
+              indeterminate={browser.modelProgress === 0}
             />
           </div>
         </div>
       ) : null}
 
-      {isBusy && progressLabel ? (
+      {showBrowserActiveProgress ? (
         <div className="mt-4 space-y-4 rounded-xl border border-black/8 bg-zinc-50 p-4 text-sm dark:border-white/[.145] dark:bg-white/4">
           <p className="font-medium text-black dark:text-zinc-50">
             {progressLabel}
           </p>
 
-          {showModelProgress && (
+          {browser.status === "loading_model" && (
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-zinc-600 dark:text-zinc-400">
                   Model download
                 </span>
                 <span className="font-medium text-black dark:text-zinc-50">
-                  {modelProgress > 0 ? `${modelProgress}%` : "Starting…"}
+                  {browser.modelProgress > 0
+                    ? `${browser.modelProgress}%`
+                    : "Starting…"}
                 </span>
               </div>
               <ProgressBar
-                value={modelProgress}
+                value={browser.modelProgress}
                 indeterminate={
-                  status === "loading_model" && modelProgress === 0
+                  browser.status === "loading_model" &&
+                  browser.modelProgress === 0
                 }
               />
             </div>
           )}
 
-          {showTranscriptionProgress && (
+          {browser.status === "transcribing" && (
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-zinc-600 dark:text-zinc-400">
                   Transcription
                 </span>
                 <span className="font-medium text-black dark:text-zinc-50">
-                  {transcriptionProgress}%
+                  {browser.transcriptionProgress}%
                 </span>
               </div>
-              <ProgressBar value={transcriptionProgress} />
+              <ProgressBar value={browser.transcriptionProgress} />
             </div>
           )}
 
-          {status === "decoding" && (
+          {browser.status === "decoding" && (
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-zinc-600 dark:text-zinc-400">
                   Audio decode
+                </span>
+                <span className="font-medium text-black dark:text-zinc-50">
+                  In progress…
+                </span>
+              </div>
+              <ProgressBar value={0} indeterminate />
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {showServerActiveProgress ? (
+        <div className="mt-4 space-y-4 rounded-xl border border-black/8 bg-zinc-50 p-4 text-sm dark:border-white/[.145] dark:bg-white/4">
+          <p className="font-medium text-black dark:text-zinc-50">
+            {progressLabel}
+          </p>
+
+          {server.status === "uploading" && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-zinc-600 dark:text-zinc-400">Upload</span>
+                <span className="font-medium text-black dark:text-zinc-50">
+                  {server.uploadProgress}%
+                </span>
+              </div>
+              <ProgressBar value={server.uploadProgress} />
+            </div>
+          )}
+
+          {server.status === "transcribing" && (
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-zinc-600 dark:text-zinc-400">
+                  Transcription
                 </span>
                 <span className="font-medium text-black dark:text-zinc-50">
                   In progress…
