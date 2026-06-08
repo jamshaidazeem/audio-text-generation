@@ -10,8 +10,9 @@ export default function Home() {
               Audio → Text (starter)
             </h1>
             <p className="mt-2 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              Start by uploading an MP3. This UI validates the file client-side
-              and shows the extension and size.
+              Upload an MP3 and transcribe it on your device using Whisper Tiny.
+              Audio stays in your browser; only model weights are downloaded on
+              first use.
             </p>
           </header>
 
