@@ -1,10 +1,11 @@
 # Audio Text Generation
 
-A Next.js app for uploading MP3 audio and transcribing it to text. Supports **on-device** transcription with Whisper Tiny ([Transformers.js](https://huggingface.co/docs/transformers.js)) or **server** transcription via the [OpenAI Whisper API](https://platform.openai.com/docs/guides/speech-to-text).
+A Next.js app for turning audio into text. Upload MP3 files or paste a YouTube link to transcribe video audio. Supports **on-device** transcription with Whisper Tiny ([Transformers.js](https://huggingface.co/docs/transformers.js)) or **server** transcription via the [OpenAI Whisper API](https://platform.openai.com/docs/guides/speech-to-text).
 
 ## Features
 
 - **Model explorer home page** — choose between transcription backends before uploading
+- **YouTube → Text** — paste a YouTube URL to confirm the video you want to transcribe (text generation coming next)
 - **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
 - MP3 file picker with `accept="audio/mpeg,.mp3"`
 - Client-side validation for file type and size
@@ -21,9 +22,10 @@ A Next.js app for uploading MP3 audio and transcribing it to text. Supports **on
 
 | Route | Description |
 | ----- | ----------- |
-| `/` | Home — model explorer with links to each backend |
+| `/` | Home — model explorer and YouTube → Text entry point |
 | `/transcribe/on-device` | Whisper Tiny in-browser transcription |
 | `/transcribe/server` | OpenAI Whisper API transcription |
+| `/youtube-text` | YouTube URL input, validation, and video confirmation before transcription |
 | `POST /api/transcribe` | Server API route (used by server mode) |
 
 Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
@@ -80,7 +82,7 @@ If the worker fails to bundle under Turbopack, use webpack instead:
 npm run dev:webpack
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a model from the home page, then upload and transcribe an MP3 on its dedicated route.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a transcription model and upload an MP3, or open **YouTube → Text** to paste a link and confirm the video you want to transcribe.
 
 ## Scripts
 
@@ -99,15 +101,18 @@ src/
 ├── app/
 │   ├── api/transcribe/route.ts     # OpenAI Whisper API (server mode)
 │   ├── transcribe/[mode]/page.tsx  # Per-model info + upload UI
+│   ├── youtube-text/page.tsx       # YouTube URL input and video confirmation
 │   ├── layout.tsx
-│   ├── page.tsx                    # Home — model explorer
+│   ├── page.tsx                    # Home — model explorer + YouTube → Text
 │   └── globals.css
 ├── components/
 │   ├── ui/                         # Shared primitives (Card, Button, ProgressBar, …)
 │   ├── BackLink.tsx
+│   ├── FeatureCard.tsx             # Home-page feature card (YouTube → Text)
 │   ├── ModelCard.tsx               # Home-page model card
 │   ├── ModelInfo.tsx               # Capabilities, pros, cons
-│   └── TranscriptionUploader.tsx   # Upload UI and progress (mode prop)
+│   ├── TranscriptionUploader.tsx   # Upload UI and progress (mode prop)
+│   └── YouTubeUrlInput.tsx         # YouTube URL validation and video confirmation
 ├── hooks/
 │   ├── useWhisperTranscription.ts  # On-device worker transcription
 │   └── useServerTranscription.ts   # Server upload + API call
@@ -117,12 +122,25 @@ src/
 │   ├── models.ts                   # Model metadata, routes, and config
 │   ├── upload-constants.ts         # Upload limits per mode
 │   ├── validate-mp3.ts             # Shared MP3 validation
+│   ├── validate-youtube-url.ts     # YouTube URL parsing and validation
 │   └── whisper-types.ts
 └── workers/
     └── whisper.worker.ts
 ```
 
 Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`src/lib/models.ts`](src/lib/models.ts). Adding a third model is config-driven: extend `MODELS` and the corresponding hook/uploader wiring.
+
+## YouTube → Text (`/youtube-text`)
+
+Paste a YouTube URL to validate the link and confirm the correct video before transcription.
+
+**Current flow:**
+
+1. Enter a YouTube URL (`watch`, `youtu.be`, `shorts`, `embed`, and `m.youtube.com` links)
+2. Client-side validation via [`src/lib/validate-youtube-url.ts`](src/lib/validate-youtube-url.ts)
+3. Embedded player confirms the video you intend to transcribe
+
+**Coming next:** download or stream the video audio and run it through the same transcription backends as MP3 upload.
 
 ## Transcription models
 
@@ -141,12 +159,22 @@ Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`
 - Audio is sent to your server, then to OpenAI
 - Max file size: **1 MB** (suitable for Vercel serverless limits)
 
-## Upload validation
+## Validation
+
+### MP3 upload
 
 Validation runs when a file is selected (client) and again on the API route (server):
 
 1. **Type** — `.mp3` extension or `audio/mpeg` MIME type
 2. **Size** — 5 MB (on device) or 1 MB (server mode)
+
+### YouTube URL
+
+Validation runs when the user confirms the video (client only):
+
+1. **Non-empty** — a URL must be provided
+2. **Recognized host/path** — `youtube.com`, `youtu.be`, and common variants
+3. **Video ID** — 11-character YouTube video ID extracted from the link
 
 ## Privacy and performance
 

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Audio → Text",
   description:
-    "Upload MP3 audio and transcribe it on-device with Whisper Tiny or via the OpenAI Whisper API.",
+    "Transcribe MP3 uploads or YouTube video audio into text — on-device with Whisper Tiny or via the OpenAI Whisper API.",
 };
 
 export default function RootLayout({
