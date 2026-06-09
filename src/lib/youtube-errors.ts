@@ -109,7 +109,7 @@ export function mapYtDlpError(error: unknown): YouTubePipelineError {
   if (lower.includes("ffmpeg") || lower.includes("ffprobe")) {
     return new YouTubePipelineError(
       "extraction_download",
-      "Audio extraction failed. ffmpeg is required to convert YouTube audio to MP3.",
+      "Audio download failed. ffmpeg may be required for this video format.",
     );
   }
 
@@ -171,7 +171,7 @@ export function mapOpenAITranscriptionError(
 
   return new YouTubePipelineError(
     "transcription",
-    "OpenAI failed to transcribe the extracted audio.",
+      "OpenAI failed to transcribe the downloaded audio.",
   );
 }
 

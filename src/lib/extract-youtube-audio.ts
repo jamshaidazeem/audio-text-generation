@@ -5,6 +5,12 @@ import path from "node:path";
 import youtubedl from "youtube-dl-exec";
 
 import {
+  getExtension,
+  getSupportedFormatsLabel,
+  isSupportedAudioUpload,
+  mimeTypeForExtension,
+} from "@/lib/validate-audio-upload";
+import {
   MAX_YOUTUBE_AUDIO_BYTES,
   MAX_YOUTUBE_AUDIO_LABEL,
 } from "@/lib/youtube-constants";
@@ -15,6 +21,14 @@ import {
 } from "@/lib/youtube-errors";
 
 export { YouTubePipelineError as YouTubeExtractionError } from "@/lib/youtube-errors";
+
+function isCompletedDownload(filename: string): boolean {
+  return (
+    !filename.endsWith(".part") &&
+    !filename.endsWith(".ytdl") &&
+    !filename.endsWith(".temp")
+  );
+}
 
 export async function extractYouTubeAudio(videoId: string): Promise<File> {
   let tempDir: string;
@@ -34,9 +48,8 @@ export async function extractYouTubeAudio(videoId: string): Promise<File> {
   try {
     try {
       await youtubedl(url, {
-        extractAudio: true,
-        audioFormat: "mp3",
         output: outputTemplate,
+        format: "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
         noPlaylist: true,
         noWarnings: true,
       });
@@ -59,12 +72,26 @@ export async function extractYouTubeAudio(videoId: string): Promise<File> {
       );
     }
 
-    const audioFile = files.find((file) => file.endsWith(".mp3"));
+    const audioFile = files.find(isCompletedDownload);
 
     if (!audioFile) {
       throw new YouTubePipelineError(
         "extraction_read",
-        "Download finished but no MP3 audio file was produced.",
+        "Download finished but no audio file was produced.",
+      );
+    }
+
+    if (
+      !isSupportedAudioUpload({
+        name: audioFile,
+      })
+    ) {
+      const ext = getExtension(audioFile);
+      throw new YouTubePipelineError(
+        "extraction_read",
+        ext
+          ? `Downloaded audio format ".${ext}" is not supported for transcription. Supported formats: ${getSupportedFormatsLabel()}.`
+          : `Downloaded audio format is not supported for transcription. Supported formats: ${getSupportedFormatsLabel()}.`,
       );
     }
 
@@ -76,26 +103,29 @@ export async function extractYouTubeAudio(videoId: string): Promise<File> {
     } catch {
       throw new YouTubePipelineError(
         "extraction_read",
-        "Could not read the extracted audio file from disk.",
+        "Could not read the downloaded audio file from disk.",
       );
     }
 
     if (buffer.length === 0) {
       throw new YouTubePipelineError(
         "extraction_read",
-        "Extracted audio file is empty.",
+        "Downloaded audio file is empty.",
       );
     }
 
     if (buffer.length > MAX_YOUTUBE_AUDIO_BYTES) {
       throw new YouTubePipelineError(
         "extraction_read",
-        `Extracted audio is too large. Maximum size is ${MAX_YOUTUBE_AUDIO_LABEL}.`,
+        `Downloaded audio is too large. Maximum size is ${MAX_YOUTUBE_AUDIO_LABEL}.`,
       );
     }
 
-    return new File([new Uint8Array(buffer)], `${videoId}.mp3`, {
-      type: "audio/mpeg",
+    const ext = getExtension(audioFile);
+    const mimeType = mimeTypeForExtension(ext) ?? "application/octet-stream";
+
+    return new File([new Uint8Array(buffer)], audioFile, {
+      type: mimeType,
     });
   } catch (error) {
     if (isYouTubePipelineError(error)) {

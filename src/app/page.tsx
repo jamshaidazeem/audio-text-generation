@@ -9,7 +9,7 @@ export default function Home() {
     <PageShell>
       <PageHeader
         title="Audio → Text"
-        description="Transcribe MP3 uploads or YouTube video audio into text."
+        description="Transcribe audio uploads or YouTube video audio into text."
       />
 
       <div className="grid gap-4 sm:grid-cols-2">

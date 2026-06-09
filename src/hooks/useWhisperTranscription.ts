@@ -140,11 +140,11 @@ export function useWhisperTranscription(enabled = true) {
         }
 
         worker.postMessage({ type: "transcribe", audio }, [audio.buffer]);
-      } catch (err) {
+      } catch {
         isTranscribingRef.current = false;
         setStatus("error");
         setError(
-          err instanceof Error ? err.message : "Failed to decode audio file.",
+          "This browser could not decode the selected audio file. Try mp3 or wav, or use the server transcription mode.",
         );
       }
     },

@@ -19,7 +19,12 @@ import {
   MAX_UPLOAD_LABEL,
   type TranscriptionMode,
 } from "@/lib/upload-constants";
-import { getExtension, validateMp3File } from "@/lib/validate-mp3";
+import {
+  getExtension,
+  getFileInputAccept,
+  getSupportedFormatsLabel,
+  validateAudioUpload,
+} from "@/lib/validate-audio-upload";
 
 type TranscriptionUploaderProps = {
   mode: TranscriptionMode;
@@ -62,7 +67,7 @@ export function TranscriptionUploader({ mode }: TranscriptionUploaderProps) {
 
   function validateSelectedFile(selected: File) {
     const limit = browserEnabled ? MAX_UPLOAD_BYTES : MAX_SERVER_UPLOAD_BYTES;
-    return validateMp3File(selected, limit);
+    return validateAudioUpload(selected, limit);
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -109,10 +114,11 @@ export function TranscriptionUploader({ mode }: TranscriptionUploaderProps) {
   return (
     <Card variant="elevated" className="w-full">
       <h2 className="text-lg font-semibold tracking-tight text-black dark:text-zinc-50">
-        Upload an MP3
+        Upload audio
       </h2>
       <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Choose a single <span className="font-medium">.mp3</span> file (max{" "}
+        Choose a single audio file (
+        <span className="font-medium">{getSupportedFormatsLabel()}</span>; max{" "}
         <span className="font-medium">{maxLabel}</span>), then transcribe it.
       </p>
 
@@ -120,7 +126,7 @@ export function TranscriptionUploader({ mode }: TranscriptionUploaderProps) {
         <input
           ref={inputRef}
           type="file"
-          accept="audio/mpeg,.mp3"
+          accept={getFileInputAccept()}
           onChange={onFileChange}
           disabled={isBusy}
           className="block w-full cursor-pointer rounded-lg border border-black/8 bg-transparent px-3 py-2 text-sm text-black file:mr-4 file:rounded-full file:border-0 file:bg-zinc-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/[.145] dark:text-zinc-50 dark:file:bg-zinc-100 dark:file:text-black dark:hover:file:bg-zinc-200"

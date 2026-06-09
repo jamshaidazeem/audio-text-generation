@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { transcribeWithOpenAI } from "@/lib/transcribe-openai";
 import { MAX_SERVER_UPLOAD_BYTES } from "@/lib/upload-constants";
-import { validateMp3File } from "@/lib/validate-mp3";
+import { validateAudioUpload } from "@/lib/validate-audio-upload";
 
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No file provided." }, { status: 400 });
   }
 
-  const validationError = validateMp3File(file, MAX_SERVER_UPLOAD_BYTES);
+  const validationError = validateAudioUpload(file, MAX_SERVER_UPLOAD_BYTES);
 
   if (validationError) {
     return NextResponse.json({ error: validationError }, { status: 400 });

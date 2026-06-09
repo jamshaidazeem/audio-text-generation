@@ -3,6 +3,7 @@ import {
   MAX_UPLOAD_LABEL,
   type TranscriptionMode,
 } from "@/lib/upload-constants";
+import { getSupportedFormatsLabel } from "@/lib/validate-audio-upload";
 
 export type ModelId = "on-device" | "server";
 
@@ -30,7 +31,7 @@ export const MODELS: ModelConfig[] = [
     modelName: "Xenova/whisper-tiny",
     maxUploadLabel: MAX_UPLOAD_LABEL,
     capabilities: [
-      "MP3 upload with client-side validation (max 5 MB)",
+      `Audio upload with client-side validation (${getSupportedFormatsLabel()}; max ${MAX_UPLOAD_LABEL})`,
       "Speech-to-text transcription in a Web Worker",
       "Background model preload on page load (~40 MB, cached after first use)",
       "Progress tracking for model download, decode, and transcription",
@@ -58,7 +59,7 @@ export const MODELS: ModelConfig[] = [
     modelName: "whisper-1",
     maxUploadLabel: MAX_SERVER_UPLOAD_LABEL,
     capabilities: [
-      "MP3 upload with client-side validation (max 1 MB)",
+      `Audio upload with client-side validation (${getSupportedFormatsLabel()}; max ${MAX_SERVER_UPLOAD_LABEL})`,
       "Server-side transcription via OpenAI Audio API",
       "Upload progress tracking with XHR",
       "Returns plain-text transcript",
