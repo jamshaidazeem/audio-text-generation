@@ -1,11 +1,11 @@
 # Audio Text Generation
 
-A Next.js app for turning audio into text. Upload MP3 files or paste a YouTube link to transcribe video audio. Supports **on-device** transcription with Whisper Tiny ([Transformers.js](https://huggingface.co/docs/transformers.js)) or **server** transcription via the [OpenAI Whisper API](https://platform.openai.com/docs/guides/speech-to-text).
+A Next.js app for turning audio into text. Upload MP3 files or use a YouTube link to preview a video, download the file, or generate a transcript. Supports **on-device** transcription with Whisper Tiny ([Transformers.js](https://huggingface.co/docs/transformers.js)) or **server** transcription via the [OpenAI Whisper API](https://platform.openai.com/docs/guides/speech-to-text).
 
 ## Features
 
 - **Model explorer home page** — choose between transcription backends before uploading
-- **YouTube → Text** — paste a YouTube URL, confirm the video, and transcribe its audio via OpenAI (local dev, max **1 min**)
+- **YouTube → Text** — preview a video, download the file, or transcribe to text (local dev; max **1 min** for download and transcribe)
 - **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
 - MP3 file picker with `accept="audio/mpeg,.mp3"`
 - Client-side validation for file type and size
@@ -25,8 +25,10 @@ A Next.js app for turning audio into text. Upload MP3 files or paste a YouTube l
 | `/` | Home — model explorer and YouTube → Text entry point |
 | `/transcribe/on-device` | Whisper Tiny in-browser transcription |
 | `/transcribe/server` | OpenAI Whisper API transcription |
-| `/youtube-text` | YouTube URL input, video confirmation, and transcription UI |
+| `/youtube-text` | YouTube URL input, preview, download, and transcription UI |
 | `POST /api/transcribe` | Server API route (used by server MP3 mode) |
+| `POST /api/youtube-info` | Fetch YouTube video duration (metadata only) |
+| `POST /api/download-youtube` | Download YouTube media via yt-dlp and return the file |
 | `POST /api/transcribe-youtube` | Extract YouTube audio with yt-dlp and transcribe via OpenAI |
 
 Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
@@ -46,8 +48,8 @@ Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 
 - Node.js **20.9+** (required by Next.js 16)
 - This repo pins **v22.12.0** in [`.nvmrc`](.nvmrc)
-- **Server mode and YouTube → Text:** an OpenAI API key with access to the Audio API
-- **YouTube → Text (local dev):** Python **3.9+** as `python3` on your PATH (`youtube-dl-exec` uses it to run yt-dlp)
+- **Server mode and YouTube transcription:** an OpenAI API key with access to the Audio API
+- **YouTube preview, download, and transcription (local dev):** Python **3.9+** as `python3` on your PATH (`youtube-dl-exec` uses it to run yt-dlp)
 
 ```bash
 nvm use
@@ -61,7 +63,7 @@ Install dependencies:
 npm install
 ```
 
-Copy the environment template and add your OpenAI key (required for server mode and YouTube → Text):
+Copy the environment template and add your OpenAI key (required for server mode and YouTube transcription):
 
 ```bash
 cp env.example .env.local
@@ -85,7 +87,7 @@ If the worker fails to bundle under Turbopack, use webpack instead:
 npm run dev:webpack
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a transcription model and upload an MP3, or open **YouTube → Text** to paste a link, confirm the video, and transcribe.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a transcription model and upload an MP3, or open **YouTube → Text** to preview a video, download it, or transcribe it.
 
 ## Scripts
 
@@ -103,9 +105,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a tran
 src/
 ├── app/
 │   ├── api/transcribe/route.ts         # OpenAI Whisper API (server MP3 mode)
+│   ├── api/download-youtube/route.ts   # YouTube media download
 │   ├── api/transcribe-youtube/route.ts # YouTube audio extraction + OpenAI transcription
+│   ├── api/youtube-info/route.ts       # YouTube video metadata (duration)
 │   ├── transcribe/[mode]/page.tsx      # Per-model info + upload UI
-│   ├── youtube-text/page.tsx           # YouTube URL input and transcription UI
+│   ├── youtube-text/page.tsx           # YouTube preview, download, and transcription UI
 │   ├── layout.tsx
 │   ├── page.tsx                    # Home — model explorer + YouTube → Text
 │   └── globals.css
@@ -116,21 +120,24 @@ src/
 │   ├── ModelCard.tsx               # Home-page model card
 │   ├── ModelInfo.tsx               # Capabilities, pros, cons
 │   ├── TranscriptionUploader.tsx   # Upload UI and progress (mode prop)
-│   └── YouTubeUrlInput.tsx             # YouTube URL validation, preview, and transcription UI
+│   └── YouTubeUrlInput.tsx             # YouTube URL validation, preview, download, and transcription UI
 ├── hooks/
 │   ├── useWhisperTranscription.ts      # On-device worker transcription
 │   ├── useServerTranscription.ts       # Server upload + API call
+│   ├── useYouTubeDownload.ts           # YouTube download via API
 │   └── useYouTubeTranscription.ts      # YouTube URL transcription via API
 ├── lib/
 │   ├── audio.ts
-│   ├── extract-youtube-audio.ts        # yt-dlp audio extraction (server only)
+│   ├── download-youtube-media.ts       # yt-dlp raw media download (server only)
+│   ├── extract-youtube-audio.ts        # yt-dlp MP3 extraction for transcription (server only)
+│   ├── get-youtube-video-info.ts       # yt-dlp metadata (duration)
 │   ├── format-bytes.ts
 │   ├── models.ts                       # Model metadata, routes, and config
 │   ├── transcribe-openai.ts            # Shared OpenAI Whisper helper
 │   ├── upload-constants.ts             # Upload limits per mode
 │   ├── validate-mp3.ts                 # Shared MP3 validation
 │   ├── validate-youtube-url.ts         # YouTube URL parsing and validation
-│   ├── youtube-constants.ts            # YouTube duration and audio size limits
+│   ├── youtube-constants.ts            # YouTube duration and file size limits
 │   ├── youtube-errors.ts               # Step-based YouTube pipeline errors
 │   └── whisper-types.ts
 └── workers/
@@ -141,23 +148,41 @@ Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`
 
 ## YouTube → Text (`/youtube-text`)
 
-Paste a YouTube URL, confirm the video, and transcribe its audio into text via OpenAI Whisper. **Local dev only** for now — yt-dlp runs inside the Next.js server process.
+Preview a YouTube video, download the file, or generate a text transcript. **Local dev only** for now — yt-dlp runs inside the Next.js server process.
 
-**Flow:**
+These are standalone actions on the same page: preview, download, and transcribe do not depend on one another.
+
+**Preview**
 
 1. Enter a YouTube URL (`watch`, `youtu.be`, `shorts`, `embed`, and `m.youtube.com` links)
 2. Client-side validation via [`src/lib/validate-youtube-url.ts`](src/lib/validate-youtube-url.ts)
-3. Embedded player confirms the video you intend to transcribe
-4. `POST /api/transcribe-youtube` extracts audio with yt-dlp ([`src/lib/extract-youtube-audio.ts`](src/lib/extract-youtube-audio.ts)) and transcribes via [`src/lib/transcribe-openai.ts`](src/lib/transcribe-openai.ts)
+3. Confirm the video to load an embedded preview
+4. `POST /api/youtube-info` fetches duration via yt-dlp ([`src/lib/get-youtube-video-info.ts`](src/lib/get-youtube-video-info.ts))
+5. Videos longer than **1 minute** show a warning; download and transcribe are disabled
+
+**Download**
+
+1. Confirm a video that is **1 minute or shorter**
+2. `POST /api/download-youtube` downloads media with yt-dlp ([`src/lib/download-youtube-media.ts`](src/lib/download-youtube-media.ts)) and returns the file to the browser
+3. Does not require `OPENAI_API_KEY`
+
+**Transcribe**
+
+1. Confirm a video that is **1 minute or shorter**
+2. `POST /api/transcribe-youtube` extracts MP3 audio with yt-dlp ([`src/lib/extract-youtube-audio.ts`](src/lib/extract-youtube-audio.ts)) and transcribes via [`src/lib/transcribe-openai.ts`](src/lib/transcribe-openai.ts)
+3. Requires `OPENAI_API_KEY`
 
 **Limits:**
 
-- Max video duration: **1 minute**
-- Max extracted audio size: **25 MB** (OpenAI Whisper API limit)
-- Requires `OPENAI_API_KEY`
-- Step-specific error messages for URL validation, download, file read, and transcription failures
+| Action | Max duration | Max file size |
+| ------ | ------------ | ------------- |
+| Preview | — | — |
+| Download | 1 minute | 100 MB |
+| Transcribe | 1 minute | 25 MB (extracted audio; OpenAI Whisper API limit) |
 
-**Not supported yet:** on-device browser Whisper for YouTube (audio cannot be downloaded in the browser). Vercel/serverless deployment requires a separate audio-extraction service.
+Step-specific error messages cover URL validation, download, file read, and transcription failures.
+
+**Not supported yet:** on-device browser Whisper for YouTube (audio cannot be downloaded in the browser). Vercel/serverless deployment requires a separate media-extraction service.
 
 ## Transcription models
 
@@ -192,12 +217,13 @@ Client validation runs when the user confirms the video:
 1. **Non-empty** — a URL must be provided
 2. **Recognized host/path** — `youtube.com`, `youtu.be`, and common variants
 3. **Video ID** — 11-character YouTube video ID extracted from the link
+4. **Duration** — fetched from `POST /api/youtube-info`; download and transcribe are blocked when the video is longer than 1 minute
 
-Server validation runs on `POST /api/transcribe-youtube`:
+Server validation runs on YouTube API routes:
 
 1. **Video ID format** — must match the 11-character pattern
-2. **Duration** — yt-dlp `--match-filter` rejects videos over 1 minute
-3. **Audio size** — extracted MP3 must be ≤ 25 MB
+2. **Download size** — downloaded media must be ≤ 100 MB
+3. **Transcription audio size** — extracted MP3 must be ≤ 25 MB
 
 ## Privacy and performance
 

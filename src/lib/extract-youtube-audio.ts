@@ -7,7 +7,6 @@ import youtubedl from "youtube-dl-exec";
 import {
   MAX_YOUTUBE_AUDIO_BYTES,
   MAX_YOUTUBE_AUDIO_LABEL,
-  MAX_YOUTUBE_DURATION_SECONDS,
 } from "@/lib/youtube-constants";
 import {
   isYouTubePipelineError,
@@ -39,7 +38,6 @@ export async function extractYouTubeAudio(videoId: string): Promise<File> {
         audioFormat: "mp3",
         output: outputTemplate,
         noPlaylist: true,
-        matchFilter: `duration <= ${MAX_YOUTUBE_DURATION_SECONDS}`,
         noWarnings: true,
       });
     } catch (error) {

@@ -7,8 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { LabeledProgress } from "@/components/ui/LabeledProgress";
 import { TranscriptPanel } from "@/components/ui/TranscriptPanel";
+import { useYouTubeDownload } from "@/hooks/useYouTubeDownload";
 import { useYouTubeTranscription } from "@/hooks/useYouTubeTranscription";
-import { MAX_YOUTUBE_DURATION_LABEL } from "@/lib/youtube-constants";
+import {
+  MAX_YOUTUBE_DURATION_LABEL,
+  MAX_YOUTUBE_DURATION_SECONDS,
+} from "@/lib/youtube-constants";
 import {
   getYouTubeStepLabel,
   type YouTubePipelineStep,
@@ -17,6 +21,22 @@ import {
   parseYouTubeVideoId,
   validateYouTubeUrl,
 } from "@/lib/validate-youtube-url";
+
+function formatDuration(seconds: number): string {
+  const total = Math.round(seconds);
+  const minutes = Math.floor(total / 60);
+  const remainingSeconds = total % 60;
+
+  if (minutes === 0) {
+    return `${remainingSeconds} seconds`;
+  }
+
+  if (remainingSeconds === 0) {
+    return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  }
+
+  return `${minutes} min ${remainingSeconds} sec`;
+}
 
 function StepErrorAlert({
   step,
@@ -39,8 +59,14 @@ export function YouTubeUrlInput() {
   const [validationErrorStep, setValidationErrorStep] =
     useState<YouTubePipelineStep | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [durationWarning, setDurationWarning] = useState<string | null>(null);
+  const [durationBlocked, setDurationBlocked] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const transcription = useYouTubeTranscription();
+  const download = useYouTubeDownload();
+
+  const isBusy = transcription.isBusy || download.isBusy || isConfirming;
 
   function clearValidationError() {
     setValidationError(null);
@@ -51,40 +77,93 @@ export function YouTubeUrlInput() {
     setUrl(value);
     clearValidationError();
     setVideoId(null);
+    setDurationWarning(null);
+    setDurationBlocked(false);
     transcription.reset();
+    download.reset();
   }
 
-  function onConfirmVideo() {
+  async function onConfirmVideo() {
     const error = validateYouTubeUrl(url);
     if (error) {
       setValidationError(error);
       setValidationErrorStep("url_validation");
       setVideoId(null);
+      setDurationWarning(null);
+      setDurationBlocked(false);
       transcription.reset();
+      download.reset();
       return;
     }
 
+    const confirmedVideoId = parseYouTubeVideoId(url);
+    if (!confirmedVideoId) return;
+
     clearValidationError();
-    setVideoId(parseYouTubeVideoId(url));
+    setDurationWarning(null);
+    setDurationBlocked(false);
+    setVideoId(confirmedVideoId);
     transcription.reset();
+    download.reset();
+    setIsConfirming(true);
+
+    try {
+      const response = await fetch("/api/youtube-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId: confirmedVideoId }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as { durationSeconds?: number };
+
+      if (
+        typeof data.durationSeconds === "number" &&
+        data.durationSeconds > MAX_YOUTUBE_DURATION_SECONDS
+      ) {
+        setDurationBlocked(true);
+        setDurationWarning(
+          `This video is about ${formatDuration(data.durationSeconds)} long, which is longer than ${MAX_YOUTUBE_DURATION_LABEL}. Download and transcribe are not available for this video.`,
+        );
+      }
+    } catch {
+      // Duration check is best-effort; preview still works without it.
+    } finally {
+      setIsConfirming(false);
+    }
   }
 
   async function onTranscribe() {
-    if (!videoId || transcription.isBusy) return;
+    if (!videoId || isBusy || durationBlocked) return;
     clearValidationError();
     await transcription.transcribe(videoId);
   }
 
-  const displayError = validationError ?? transcription.error;
+  async function onDownload() {
+    if (!videoId || isBusy || durationBlocked) return;
+    clearValidationError();
+    await download.download(videoId);
+  }
+
+  const actionsAvailable = videoId && !isConfirming && !durationBlocked;
+
+  const displayError =
+    validationError ?? transcription.error ?? download.error;
   const displayErrorStep =
-    validationErrorStep ?? transcription.errorStep ?? null;
+    validationErrorStep ??
+    transcription.errorStep ??
+    download.errorStep ??
+    null;
 
   return (
     <Card variant="elevated" className="space-y-4">
       <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-        Enter a YouTube video URL, confirm the preview, then transcribe its
-        audio into text. Videos up to {MAX_YOUTUBE_DURATION_LABEL} are supported
-        (local dev, OpenAI server mode).
+        You can enter a YouTube URL to preview the video. You can also download
+        the file or generate a text transcript. Videos up to{" "}
+        {MAX_YOUTUBE_DURATION_LABEL} are supported.
       </p>
 
       <div className="space-y-2">
@@ -100,22 +179,37 @@ export function YouTubeUrlInput() {
           value={url}
           onChange={(e) => onUrlChange(e.target.value)}
           placeholder="https://www.youtube.com/watch?v=…"
-          disabled={transcription.isBusy}
+          disabled={isBusy}
           className="w-full rounded-xl border border-black/8 bg-white px-4 py-2.5 text-sm text-black placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/[.145] dark:bg-black dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
         />
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={onConfirmVideo} disabled={transcription.isBusy}>
-          Confirm video
+        <Button onClick={onConfirmVideo} disabled={isBusy}>
+          {isConfirming ? "Checking…" : "Confirm video"}
         </Button>
 
-        {videoId ? (
-          <Button onClick={onTranscribe} disabled={transcription.isBusy}>
-            {transcription.isBusy ? "Working…" : "Transcribe"}
-          </Button>
+        {actionsAvailable ? (
+          <>
+            <Button
+              variant="secondary"
+              onClick={onDownload}
+              disabled={isBusy}
+            >
+              {download.isBusy ? "Working…" : "Download"}
+            </Button>
+            <Button onClick={onTranscribe} disabled={isBusy}>
+              {transcription.isBusy ? "Working…" : "Transcribe"}
+            </Button>
+          </>
         ) : null}
       </div>
+
+      {durationWarning ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-800 dark:text-amber-200">
+          {durationWarning}
+        </div>
+      ) : null}
 
       {displayError && displayErrorStep ? (
         <StepErrorAlert step={displayErrorStep} message={displayError} />
@@ -135,10 +229,10 @@ export function YouTubeUrlInput() {
         </div>
       ) : null}
 
-      {transcription.isBusy && transcription.progressLabel ? (
+      {isBusy && (transcription.progressLabel ?? download.progressLabel) ? (
         <Card className="space-y-4 text-sm">
           <p className="font-medium text-black dark:text-zinc-50">
-            {transcription.progressLabel}
+            {transcription.progressLabel ?? download.progressLabel}
           </p>
           <LabeledProgress
             label="Processing"
