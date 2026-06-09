@@ -1,6 +1,6 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
+import { transcribeWithOpenAI } from "@/lib/transcribe-openai";
 import { MAX_SERVER_UPLOAD_BYTES } from "@/lib/upload-constants";
 import { validateMp3File } from "@/lib/validate-mp3";
 
@@ -38,14 +38,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const openai = new OpenAI({ apiKey });
-
-    const transcription = await openai.audio.transcriptions.create({
-      file,
-      model: "whisper-1",
-    });
-
-    return NextResponse.json({ text: transcription.text });
+    const text = await transcribeWithOpenAI(file, apiKey);
+    return NextResponse.json({ text });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Transcription failed.";

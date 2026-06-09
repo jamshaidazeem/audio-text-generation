@@ -1,0 +1,5 @@
+export const MAX_YOUTUBE_DURATION_SECONDS = 60;
+export const MAX_YOUTUBE_DURATION_LABEL = "1 minute";
+
+export const MAX_YOUTUBE_AUDIO_BYTES = 25 * 1024 * 1024;
+export const MAX_YOUTUBE_AUDIO_LABEL = "25 MB";

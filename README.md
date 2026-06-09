@@ -5,7 +5,7 @@ A Next.js app for turning audio into text. Upload MP3 files or paste a YouTube l
 ## Features
 
 - **Model explorer home page** — choose between transcription backends before uploading
-- **YouTube → Text** — paste a YouTube URL to confirm the video you want to transcribe (text generation coming next)
+- **YouTube → Text** — paste a YouTube URL, confirm the video, and transcribe its audio via OpenAI (local dev, max **1 min**)
 - **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
 - MP3 file picker with `accept="audio/mpeg,.mp3"`
 - Client-side validation for file type and size
@@ -25,8 +25,9 @@ A Next.js app for turning audio into text. Upload MP3 files or paste a YouTube l
 | `/` | Home — model explorer and YouTube → Text entry point |
 | `/transcribe/on-device` | Whisper Tiny in-browser transcription |
 | `/transcribe/server` | OpenAI Whisper API transcription |
-| `/youtube-text` | YouTube URL input, validation, and video confirmation before transcription |
-| `POST /api/transcribe` | Server API route (used by server mode) |
+| `/youtube-text` | YouTube URL input, video confirmation, and transcription UI |
+| `POST /api/transcribe` | Server API route (used by server MP3 mode) |
+| `POST /api/transcribe-youtube` | Extract YouTube audio with yt-dlp and transcribe via OpenAI |
 
 Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 
@@ -38,13 +39,15 @@ Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 - [Tailwind CSS 4](https://tailwindcss.com)
 - [@huggingface/transformers](https://huggingface.co/docs/transformers.js) (Whisper Tiny in-browser)
 - [OpenAI Node SDK](https://github.com/openai/openai-node) (server mode)
+- [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec) (YouTube audio extraction via yt-dlp)
 - [ESLint](https://eslint.org)
 
 ## Prerequisites
 
 - Node.js **20.9+** (required by Next.js 16)
 - This repo pins **v22.12.0** in [`.nvmrc`](.nvmrc)
-- **Server mode only:** an OpenAI API key with access to the Audio API
+- **Server mode and YouTube → Text:** an OpenAI API key with access to the Audio API
+- **YouTube → Text (local dev):** Python **3.9+** as `python3` on your PATH (`youtube-dl-exec` uses it to run yt-dlp)
 
 ```bash
 nvm use
@@ -58,7 +61,7 @@ Install dependencies:
 npm install
 ```
 
-Copy the environment template and add your OpenAI key (required for server mode):
+Copy the environment template and add your OpenAI key (required for server mode and YouTube → Text):
 
 ```bash
 cp env.example .env.local
@@ -82,7 +85,7 @@ If the worker fails to bundle under Turbopack, use webpack instead:
 npm run dev:webpack
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a transcription model and upload an MP3, or open **YouTube → Text** to paste a link and confirm the video you want to transcribe.
+Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a transcription model and upload an MP3, or open **YouTube → Text** to paste a link, confirm the video, and transcribe.
 
 ## Scripts
 
@@ -99,9 +102,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a tran
 ```
 src/
 ├── app/
-│   ├── api/transcribe/route.ts     # OpenAI Whisper API (server mode)
-│   ├── transcribe/[mode]/page.tsx  # Per-model info + upload UI
-│   ├── youtube-text/page.tsx       # YouTube URL input and video confirmation
+│   ├── api/transcribe/route.ts         # OpenAI Whisper API (server MP3 mode)
+│   ├── api/transcribe-youtube/route.ts # YouTube audio extraction + OpenAI transcription
+│   ├── transcribe/[mode]/page.tsx      # Per-model info + upload UI
+│   ├── youtube-text/page.tsx           # YouTube URL input and transcription UI
 │   ├── layout.tsx
 │   ├── page.tsx                    # Home — model explorer + YouTube → Text
 │   └── globals.css
@@ -112,17 +116,22 @@ src/
 │   ├── ModelCard.tsx               # Home-page model card
 │   ├── ModelInfo.tsx               # Capabilities, pros, cons
 │   ├── TranscriptionUploader.tsx   # Upload UI and progress (mode prop)
-│   └── YouTubeUrlInput.tsx         # YouTube URL validation and video confirmation
+│   └── YouTubeUrlInput.tsx             # YouTube URL validation, preview, and transcription UI
 ├── hooks/
-│   ├── useWhisperTranscription.ts  # On-device worker transcription
-│   └── useServerTranscription.ts   # Server upload + API call
+│   ├── useWhisperTranscription.ts      # On-device worker transcription
+│   ├── useServerTranscription.ts       # Server upload + API call
+│   └── useYouTubeTranscription.ts      # YouTube URL transcription via API
 ├── lib/
 │   ├── audio.ts
+│   ├── extract-youtube-audio.ts        # yt-dlp audio extraction (server only)
 │   ├── format-bytes.ts
-│   ├── models.ts                   # Model metadata, routes, and config
-│   ├── upload-constants.ts         # Upload limits per mode
-│   ├── validate-mp3.ts             # Shared MP3 validation
-│   ├── validate-youtube-url.ts     # YouTube URL parsing and validation
+│   ├── models.ts                       # Model metadata, routes, and config
+│   ├── transcribe-openai.ts            # Shared OpenAI Whisper helper
+│   ├── upload-constants.ts             # Upload limits per mode
+│   ├── validate-mp3.ts                 # Shared MP3 validation
+│   ├── validate-youtube-url.ts         # YouTube URL parsing and validation
+│   ├── youtube-constants.ts            # YouTube duration and audio size limits
+│   ├── youtube-errors.ts               # Step-based YouTube pipeline errors
 │   └── whisper-types.ts
 └── workers/
     └── whisper.worker.ts
@@ -132,15 +141,23 @@ Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`
 
 ## YouTube → Text (`/youtube-text`)
 
-Paste a YouTube URL to validate the link and confirm the correct video before transcription.
+Paste a YouTube URL, confirm the video, and transcribe its audio into text via OpenAI Whisper. **Local dev only** for now — yt-dlp runs inside the Next.js server process.
 
-**Current flow:**
+**Flow:**
 
 1. Enter a YouTube URL (`watch`, `youtu.be`, `shorts`, `embed`, and `m.youtube.com` links)
 2. Client-side validation via [`src/lib/validate-youtube-url.ts`](src/lib/validate-youtube-url.ts)
 3. Embedded player confirms the video you intend to transcribe
+4. `POST /api/transcribe-youtube` extracts audio with yt-dlp ([`src/lib/extract-youtube-audio.ts`](src/lib/extract-youtube-audio.ts)) and transcribes via [`src/lib/transcribe-openai.ts`](src/lib/transcribe-openai.ts)
 
-**Coming next:** download or stream the video audio and run it through the same transcription backends as MP3 upload.
+**Limits:**
+
+- Max video duration: **1 minute**
+- Max extracted audio size: **25 MB** (OpenAI Whisper API limit)
+- Requires `OPENAI_API_KEY`
+- Step-specific error messages for URL validation, download, file read, and transcription failures
+
+**Not supported yet:** on-device browser Whisper for YouTube (audio cannot be downloaded in the browser). Vercel/serverless deployment requires a separate audio-extraction service.
 
 ## Transcription models
 
@@ -170,11 +187,17 @@ Validation runs when a file is selected (client) and again on the API route (ser
 
 ### YouTube URL
 
-Validation runs when the user confirms the video (client only):
+Client validation runs when the user confirms the video:
 
 1. **Non-empty** — a URL must be provided
 2. **Recognized host/path** — `youtube.com`, `youtu.be`, and common variants
 3. **Video ID** — 11-character YouTube video ID extracted from the link
+
+Server validation runs on `POST /api/transcribe-youtube`:
+
+1. **Video ID format** — must match the 11-character pattern
+2. **Duration** — yt-dlp `--match-filter` rejects videos over 1 minute
+3. **Audio size** — extracted MP3 must be ≤ 25 MB
 
 ## Privacy and performance
 
@@ -200,7 +223,7 @@ Keep the tab open while transcription runs.
 
 - `turbopack: {}` — required for Next.js 16 builds when a custom `webpack` config is present
 - `webpack` aliases — excludes Node-only packages from browser bundles
-- `serverExternalPackages` — keeps `@huggingface/transformers` external on the server
+- `serverExternalPackages` — keeps `@huggingface/transformers` and `youtube-dl-exec` external on the server
 
 ## License
 

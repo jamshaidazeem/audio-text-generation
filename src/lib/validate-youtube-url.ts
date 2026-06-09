@@ -1,7 +1,11 @@
-const VIDEO_ID_PATTERN = /^[\w-]{11}$/;
+export const VIDEO_ID_PATTERN = /^[\w-]{11}$/;
+
+export function isValidYouTubeVideoId(id: string): boolean {
+  return VIDEO_ID_PATTERN.test(id);
+}
 
 function isValidVideoId(id: string): boolean {
-  return VIDEO_ID_PATTERN.test(id);
+  return isValidYouTubeVideoId(id);
 }
 
 function normalizeHost(hostname: string): string {

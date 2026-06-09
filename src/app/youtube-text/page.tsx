@@ -8,7 +8,7 @@ import { PageShell } from "@/components/ui/PageShell";
 export const metadata: Metadata = {
   title: "YouTube → Text — Audio → Text",
   description:
-    "Paste a YouTube link to confirm the video and transcribe its audio into text.",
+    "Paste a YouTube link, confirm the video, and transcribe its audio into text via OpenAI Whisper.",
 };
 
 export default function YouTubeTextPage() {
@@ -17,7 +17,7 @@ export default function YouTubeTextPage() {
       <BackLink label="Home" />
       <PageHeader
         title="YouTube → Text"
-        description="Paste a YouTube URL to confirm the video you want to transcribe. Text generation is coming next."
+        description="Paste a YouTube URL, confirm the video, and transcribe its audio into text via OpenAI Whisper."
       />
       <YouTubeUrlInput />
     </PageShell>
