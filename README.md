@@ -11,7 +11,7 @@ A Next.js app for turning audio into text. Upload audio files or use a YouTube l
 - Client-side validation for file type and size
 - **Two transcription models:**
   - **On device** — Whisper Tiny in the browser (private, max **5 MB**)
-  - **Server (OpenAI)** — upload to API route, transcribed by OpenAI (max **1 MB**)
+  - **Server (OpenAI)** — upload to API route, transcribed by OpenAI (max **25 MB**)
 - Background model preload in on-device mode
 - Progress bars for model download, upload, decode, and transcription
 - Web Worker inference for on-device mode
@@ -201,17 +201,17 @@ Step-specific error messages cover URL validation, download, file read, and tran
 - Server calls OpenAI `whisper-1` and returns `{ text }`
 - Accepts [OpenAI Whisper input formats](https://platform.openai.com/docs/guides/speech-to-text): mp3, mp4, mpeg, mpga, m4a, wav, webm
 - Requires `OPENAI_API_KEY` in environment (local: `.env.local`, Vercel: Project Settings → Environment Variables)
-- Audio is sent to your server, then to OpenAI
-- Max file size: **1 MB** (suitable for Vercel serverless limits)
+- File is sent to your server, then to OpenAI
+- Max file size: **25 MB**
 
 ## Validation
 
-### Audio upload
+### File upload
 
 Shared rules live in [`src/lib/validate-audio-upload.ts`](src/lib/validate-audio-upload.ts). Validation runs when a file is selected (client) and again on the API route (server):
 
 1. **Type** — extension in `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `wav`, `webm` or matching MIME type (`audio/mpeg`, `audio/mp4`, `video/mp4`, `audio/x-m4a`, `audio/wav`, `audio/wave`, `audio/x-wav`, `audio/webm`, `video/webm`)
-2. **Size** — 5 MB (on device) or 1 MB (server mode)
+2. **Size** — 5 MB (on device) or 25 MB (server mode)
 
 ### YouTube URL
 
@@ -244,7 +244,7 @@ Keep the tab open while transcription runs.
 1. Deploy the Next.js app as usual.
 2. Add `OPENAI_API_KEY` in Vercel environment variables.
 3. On-device mode works without any server configuration.
-4. Server mode uses the API route; ensure the **1 MB** upload limit is respected.
+4. Server mode uses the API route; ensure your deployment platform/reverse proxy allows **25 MB** uploads.
 
 ## Configuration notes
 
