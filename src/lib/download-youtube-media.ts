@@ -68,6 +68,10 @@ export async function downloadYouTubeMedia(
         output: outputTemplate,
         noPlaylist: true,
         noWarnings: true,
+        newline: true,
+        format:
+          "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]",
+        mergeOutputFormat: "mp4",
       });
     } catch (error) {
       if (isYouTubePipelineError(error)) {

@@ -5,7 +5,7 @@ A Next.js app for turning audio into text. Upload audio files or use a YouTube l
 ## Features
 
 - **Model explorer home page** — choose between transcription backends before uploading
-- **YouTube → Text** — preview a video, download the file, or transcribe to text (local dev; max **1 min** for download and transcribe)
+- **YouTube → Text** — preview a video, download the file, or transcribe to text (local dev; max **15 min** for download and transcribe)
 - **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
 - Audio file picker (mp3, mp4, mpeg, mpga, m4a, wav, webm)
 - Client-side validation for file type and size
@@ -158,17 +158,17 @@ These are standalone actions on the same page: preview, download, and transcribe
 2. Client-side validation via [`src/lib/validate-youtube-url.ts`](src/lib/validate-youtube-url.ts)
 3. Confirm the video to load an embedded preview
 4. `POST /api/youtube-info` fetches duration via yt-dlp ([`src/lib/get-youtube-video-info.ts`](src/lib/get-youtube-video-info.ts))
-5. Videos longer than **1 minute** show a warning; download and transcribe are disabled
+5. Videos longer than **15 minutes** show a warning; download and transcribe are disabled
 
 **Download**
 
-1. Confirm a video that is **1 minute or shorter**
+1. Confirm a video that is **15 minutes or shorter**
 2. `POST /api/download-youtube` downloads media with yt-dlp ([`src/lib/download-youtube-media.ts`](src/lib/download-youtube-media.ts)) and returns the file to the browser
 3. Does not require `OPENAI_API_KEY`
 
 **Transcribe**
 
-1. Confirm a video that is **1 minute or shorter**
+1. Confirm a video that is **15 minutes or shorter**
 2. `POST /api/transcribe-youtube` downloads native audio with yt-dlp ([`src/lib/extract-youtube-audio.ts`](src/lib/extract-youtube-audio.ts)) — typically `.m4a` or `.webm`, without re-encoding to MP3
 3. Downloaded audio is validated against the same [OpenAI-supported formats](https://platform.openai.com/docs/guides/speech-to-text) as file upload, then transcribed via [`src/lib/transcribe-openai.ts`](src/lib/transcribe-openai.ts)
 4. Requires `OPENAI_API_KEY`
@@ -178,8 +178,8 @@ These are standalone actions on the same page: preview, download, and transcribe
 | Action | Max duration | Max file size |
 | ------ | ------------ | ------------- |
 | Preview | — | — |
-| Download | 1 minute | 100 MB |
-| Transcribe | 1 minute | 25 MB (downloaded audio; OpenAI Whisper API limit) |
+| Download | 15 minutes | 500 MB |
+| Transcribe | 15 minutes | 25 MB (downloaded audio; OpenAI Whisper API limit) |
 
 Step-specific error messages cover URL validation, download, file read, and transcription failures.
 
@@ -220,12 +220,12 @@ Client validation runs when the user confirms the video:
 1. **Non-empty** — a URL must be provided
 2. **Recognized host/path** — `youtube.com`, `youtu.be`, and common variants
 3. **Video ID** — 11-character YouTube video ID extracted from the link
-4. **Duration** — fetched from `POST /api/youtube-info`; download and transcribe are blocked when the video is longer than 1 minute
+4. **Duration** — fetched from `POST /api/youtube-info`; download and transcribe are blocked when the video is longer than 15 minutes
 
 Server validation runs on YouTube API routes:
 
 1. **Video ID format** — must match the 11-character pattern
-2. **Download size** — downloaded media must be ≤ 100 MB
+2. **Download size** — downloaded media must be ≤ 500 MB
 3. **Transcription audio size** — downloaded audio must be ≤ 25 MB and in an OpenAI-supported format
 
 ## Privacy and performance
