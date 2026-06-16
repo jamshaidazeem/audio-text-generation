@@ -40,7 +40,7 @@ export const MODELS: ModelConfig[] = [
       "File stays on your device — no server upload",
       "No API key or per-request cost",
       "Works offline after the model is cached",
-      "Larger file limit (5 MB)",
+      `Up to ${MAX_UPLOAD_LABEL} per file`,
     ],
     cons: [
       "Initial model download (~40 MB) on first visit",

@@ -10,7 +10,7 @@ A Next.js app for turning audio into text. Upload audio files or use a YouTube l
 - Audio file picker (mp3, mp4, mpeg, mpga, m4a, wav, webm)
 - Client-side validation for file type and size
 - **Two transcription models:**
-  - **On device** — Whisper Tiny in the browser (private, max **5 MB**)
+  - **On device** — Whisper Tiny in the browser (private, max **25 MB**)
   - **Server (OpenAI)** — upload to API route, transcribed by OpenAI (max **25 MB**)
 - Background model preload in on-device mode
 - Progress bars for model download, upload, decode, and transcription
@@ -193,7 +193,7 @@ Step-specific error messages cover URL validation, download, file read, and tran
 - Model preloads on page load
 - Audio stays in the browser; only model weights are downloaded from Hugging Face (~40 MB, cached after first use)
 - Accepts the same formats as server upload (mp3, mp4, mpeg, mpga, m4a, wav, webm); decoding uses the browser's `AudioContext` — **mp3** and **wav** are the most reliable if another format fails
-- Max file size: **5 MB**
+- Max file size: **25 MB**
 
 ### Server / OpenAI (`/transcribe/server`)
 
@@ -211,7 +211,7 @@ Step-specific error messages cover URL validation, download, file read, and tran
 Shared rules live in [`src/lib/validate-audio-upload.ts`](src/lib/validate-audio-upload.ts). Validation runs when a file is selected (client) and again on the API route (server):
 
 1. **Type** — extension in `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `wav`, `webm` or matching MIME type (`audio/mpeg`, `audio/mp4`, `video/mp4`, `audio/x-m4a`, `audio/wav`, `audio/wave`, `audio/x-wav`, `audio/webm`, `video/webm`)
-2. **Size** — 5 MB (on device) or 25 MB (server mode)
+2. **Size** — 25 MB (on device and server mode)
 
 ### YouTube URL
 
