@@ -44,38 +44,89 @@ Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 - [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec) (YouTube audio download via yt-dlp)
 - [ESLint](https://eslint.org)
 
-## Prerequisites
+## Setup
 
-- Node.js **20.9+** (required by Next.js 16)
-- This repo pins **v22.12.0** in [`.nvmrc`](.nvmrc)
-- **Server mode and YouTube transcription:** an OpenAI API key with access to the Audio API
-- **YouTube preview, download, and transcription (local dev):** Python **3.9+** as `python3` on your PATH (`youtube-dl-exec` uses it to run yt-dlp)
+### Prerequisites
+
+| Requirement | Details |
+| ----------- | ------- |
+| Node.js | **20.9+** (this repo pins **v22.12.0** — see [`.nvmrc`](.nvmrc)) |
+| Python | **3.9+** as `python3` on PATH — needed for YouTube preview, download, and transcription (yt-dlp runs inside the Next.js server process) |
+| OpenAI API key | Required only for **server transcription** and **YouTube → Text transcription** (see below) |
+
+Switch to the pinned Node version:
 
 ```bash
 nvm use
 ```
 
-## Getting started
-
-Install dependencies:
+### Install dependencies
 
 ```bash
 npm install
 ```
 
-Copy the environment template and add your OpenAI key (required for server mode and YouTube transcription):
+### Environment variables
+
+Copy the template:
 
 ```bash
 cp env.example .env.local
 ```
 
-Set in `.env.local`:
+Open `.env.local` and fill in your key:
 
 ```env
+# Required for server (OpenAI) transcription mode and YouTube → Text transcription
 OPENAI_API_KEY=sk-...
 ```
 
-Run the development server:
+> Leave `OPENAI_API_KEY` blank or omit `.env.local` entirely if you only plan to use **on-device** transcription or YouTube **preview / download**.
+
+### Creating an OpenAI API key
+
+1. Go to [platform.openai.com](https://platform.openai.com) and sign in (or create a free account).
+2. Open **Dashboard → API keys** (`platform.openai.com/api-keys`).
+3. Click **Create new secret key**, give it a name, and copy the value — it starts with `sk-`.
+4. Paste it into `.env.local` as `OPENAI_API_KEY=sk-...`.
+5. Make sure your account has a positive credit balance (**Settings → Billing**). Whisper API calls are pay-per-use; free-tier accounts must add a payment method.
+
+The key is used server-side only (`POST /api/transcribe` and `POST /api/transcribe-youtube`). It is never sent to the browser.
+
+### What works with and without the key
+
+| Feature | No API key | With API key |
+| ------- | ---------- | ------------ |
+| On-device transcription (`/transcribe/on-device`) | Works — Whisper Tiny runs entirely in your browser | Works (key is ignored) |
+| YouTube preview | Works | Works |
+| YouTube download | Works | Works |
+| Server transcription (`/transcribe/server`) | Error — key required | Works |
+| YouTube transcription | Error — key required | Works |
+
+**Short version:** on-device transcription and YouTube preview/download need no key. A key is only required when audio is sent to OpenAI.
+
+### Estimated API cost
+
+OpenAI charges for Whisper by the minute of audio processed (rounded up to the nearest second).
+
+| Model | Rate |
+| ----- | ---- |
+| `whisper-1` | **$0.006 / minute** |
+
+Typical examples at current pricing:
+
+| Audio length | Estimated cost |
+| ------------ | -------------- |
+| 1 minute | ~$0.006 |
+| 5 minutes | ~$0.03 |
+| 10 minutes | ~$0.06 |
+| 15 minutes (YouTube max) | ~$0.09 |
+
+Costs are per transcription call. Check [OpenAI pricing](https://openai.com/api/pricing) for the latest rates — the figures above are approximate and may change.
+
+On-device mode (Whisper Tiny in the browser) has **zero API cost**.
+
+### Run the development server
 
 ```bash
 npm run dev
