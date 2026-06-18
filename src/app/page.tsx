@@ -20,13 +20,19 @@ export default function Home() {
 
       <section className="mt-10">
         <h2 className="mb-4 text-xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          YouTube → Text
+          More
         </h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <FeatureCard
             title="YouTube → Text"
             summary="Paste a YouTube URL to transcribe the video's audio into text."
             href="/youtube-text"
+          />
+          <FeatureCard
+            title="Docs"
+            summary="Setup, API key guide, model comparison, and project reference."
+            href="/docs"
+            cta="Read docs"
           />
         </div>
       </section>

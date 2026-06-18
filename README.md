@@ -6,13 +6,15 @@ A Next.js app for turning audio into text. Upload audio files or use a YouTube l
 
 - **Model explorer home page** — choose between transcription backends before uploading
 - **YouTube → Text** — preview a video, download the file, or transcribe to text (local dev; max **15 min** for download and transcribe)
-- **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
+- **Per-model pages** — capabilities, pros/cons, and model comparison table for each backend, plus a dedicated upload UI
+- **In-app documentation** — full README rendered at `/docs`, linked from the home page
 - Audio file picker (mp3, mp4, mpeg, mpga, m4a, wav, webm)
 - Client-side validation for file type and size
 - **Three transcription backends:**
   - **On device** — Whisper Tiny in the browser (private, max **25 MB**)
   - **Server — Whisper 1** — upload to API route, transcribed by OpenAI `whisper-1` (max **25 MB**)
   - **Server — GPT-4o Transcribe** — same pipeline using `gpt-4o-transcribe` for higher accuracy (max **25 MB**)
+- Model selector on server transcription and YouTube pages — choose between Whisper 1 and GPT-4o Transcribe per job
 - Background model preload in on-device mode
 - Progress bars for model download, upload, decode, and transcription
 - Web Worker inference for on-device mode
@@ -23,14 +25,15 @@ A Next.js app for turning audio into text. Upload audio files or use a YouTube l
 
 | Route | Description |
 | ----- | ----------- |
-| `/` | Home — model explorer and YouTube → Text entry point |
+| `/` | Home — model explorer, YouTube → Text, and Docs entry points |
 | `/transcribe/on-device` | Whisper Tiny in-browser transcription |
-| `/transcribe/server` | OpenAI Whisper API transcription |
-| `/youtube-text` | YouTube URL input, preview, download, and transcription UI |
-| `POST /api/transcribe` | Server API route (used by server upload mode) |
+| `/transcribe/server` | OpenAI server transcription — model selector for Whisper 1 or GPT-4o Transcribe |
+| `/youtube-text` | YouTube URL input, preview, download, and transcription UI with model selector |
+| `/docs` | In-app documentation — README rendered as styled markdown |
+| `POST /api/transcribe` | Server API route — accepts `file` and optional `model` field in FormData |
 | `POST /api/youtube-info` | Fetch YouTube video duration (metadata only) |
 | `POST /api/download-youtube` | Download YouTube media via yt-dlp and return the file |
-| `POST /api/transcribe-youtube` | Download YouTube audio with yt-dlp and transcribe via OpenAI |
+| `POST /api/transcribe-youtube` | Download YouTube audio with yt-dlp and transcribe via OpenAI — accepts optional `model` in JSON body |
 
 Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 
@@ -43,6 +46,7 @@ Invalid model routes (e.g. `/transcribe/invalid`) return a 404.
 - [@huggingface/transformers](https://huggingface.co/docs/transformers.js) (Whisper Tiny in-browser)
 - [OpenAI Node SDK](https://github.com/openai/openai-node) (server mode)
 - [youtube-dl-exec](https://github.com/microlinkhq/youtube-dl-exec) (YouTube audio download via yt-dlp)
+- [react-markdown](https://github.com/remarkjs/react-markdown) + [remark-gfm](https://github.com/remarkjs/remark-gfm) (in-app docs renderer)
 - [ESLint](https://eslint.org)
 
 ## Setup
@@ -171,36 +175,38 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Pick a tran
 ```
 src/
 ├── app/
-│   ├── api/transcribe/route.ts         # OpenAI Whisper API (server upload mode)
+│   ├── api/transcribe/route.ts         # OpenAI transcription — reads model from FormData
 │   ├── api/download-youtube/route.ts   # YouTube media download
-│   ├── api/transcribe-youtube/route.ts # YouTube audio download + OpenAI transcription
+│   ├── api/transcribe-youtube/route.ts # YouTube audio download + OpenAI transcription (model from JSON body)
 │   ├── api/youtube-info/route.ts       # YouTube video metadata (duration)
+│   ├── docs/page.tsx                   # In-app docs — reads README.md and renders via MarkdownRenderer
 │   ├── transcribe/[mode]/page.tsx      # Per-model info + upload UI
 │   ├── youtube-text/page.tsx           # YouTube preview, download, and transcription UI
 │   ├── layout.tsx
-│   ├── page.tsx                    # Home — model explorer + YouTube → Text
+│   ├── page.tsx                        # Home — model explorer, YouTube → Text, Docs
 │   └── globals.css
 ├── components/
-│   ├── ui/                         # Shared primitives (Card, Button, ProgressBar, …)
+│   ├── ui/                             # Shared primitives (Card, Button, ProgressBar, …)
 │   ├── BackLink.tsx
-│   ├── FeatureCard.tsx             # Home-page feature card (YouTube → Text)
-│   ├── ModelCard.tsx               # Home-page model card
-│   ├── ModelInfo.tsx               # Capabilities, pros, cons
-│   ├── TranscriptionUploader.tsx   # Upload UI and progress (mode prop)
-│   └── YouTubeUrlInput.tsx             # YouTube URL validation, preview, download, and transcription UI
+│   ├── FeatureCard.tsx                 # Home-page feature card
+│   ├── MarkdownRenderer.tsx            # Client component — renders markdown with styled elements
+│   ├── ModelCard.tsx                   # Home-page model card
+│   ├── ModelInfo.tsx                   # Capabilities, pros, cons + server model comparison table
+│   ├── TranscriptionUploader.tsx       # Upload UI, model selector (server mode only), and progress
+│   └── YouTubeUrlInput.tsx             # YouTube URL validation, preview, download, and transcription UI with model selector
 ├── hooks/
 │   ├── useWhisperTranscription.ts      # On-device worker transcription
-│   ├── useServerTranscription.ts       # Server upload + API call
+│   ├── useServerTranscription.ts       # Server upload + API call (accepts model param)
 │   ├── useYouTubeDownload.ts           # YouTube download via API
-│   └── useYouTubeTranscription.ts      # YouTube URL transcription via API
+│   └── useYouTubeTranscription.ts      # YouTube URL transcription via API (accepts model param)
 ├── lib/
 │   ├── audio.ts
 │   ├── download-youtube-media.ts       # yt-dlp raw media download (server only)
 │   ├── extract-youtube-audio.ts        # yt-dlp native audio download for transcription (server only)
 │   ├── get-youtube-video-info.ts       # yt-dlp metadata (duration)
 │   ├── format-bytes.ts
-│   ├── models.ts                       # Model metadata, routes, and config
-│   ├── transcribe-openai.ts            # Shared OpenAI Whisper helper
+│   ├── models.ts                       # Model metadata, OPENAI_TRANSCRIPTION_MODELS, routes, and config
+│   ├── transcribe-openai.ts            # Shared OpenAI Audio API helper (accepts model param)
 │   ├── upload-constants.ts             # Upload limits per mode
 │   ├── validate-audio-upload.ts        # Shared audio format validation
 │   ├── validate-youtube-url.ts         # YouTube URL parsing and validation
@@ -211,7 +217,7 @@ src/
     └── whisper.worker.ts
 ```
 
-Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`src/lib/models.ts`](src/lib/models.ts). Adding a third model is config-driven: extend `MODELS` and the corresponding hook/uploader wiring.
+Model metadata (titles, capabilities, pros, cons, and route mapping) lives in [`src/lib/models.ts`](src/lib/models.ts). The OpenAI model list (`OPENAI_TRANSCRIPTION_MODELS`) is also defined there — adding a third server-side model means updating that constant and the selector picks it up automatically.
 
 ## YouTube → Text (`/youtube-text`)
 
@@ -236,9 +242,10 @@ These are standalone actions on the same page: preview, download, and transcribe
 **Transcribe**
 
 1. Confirm a video that is **15 minutes or shorter**
-2. `POST /api/transcribe-youtube` downloads native audio with yt-dlp ([`src/lib/extract-youtube-audio.ts`](src/lib/extract-youtube-audio.ts)) — typically `.m4a` or `.webm`, without re-encoding to MP3
-3. Downloaded audio is validated against the same [OpenAI-supported formats](https://platform.openai.com/docs/guides/speech-to-text) as file upload, then transcribed via [`src/lib/transcribe-openai.ts`](src/lib/transcribe-openai.ts)
-4. Requires `OPENAI_API_KEY`
+2. Choose a transcription model — **Whisper 1** or **GPT-4o Transcribe** — using the selector above the action buttons (defaults to Whisper 1)
+3. `POST /api/transcribe-youtube` downloads native audio with yt-dlp ([`src/lib/extract-youtube-audio.ts`](src/lib/extract-youtube-audio.ts)) — typically `.m4a` or `.webm`, without re-encoding to MP3
+4. Downloaded audio is validated against the same [OpenAI-supported formats](https://platform.openai.com/docs/guides/speech-to-text) as file upload, then transcribed via [`src/lib/transcribe-openai.ts`](src/lib/transcribe-openai.ts) using the selected model
+5. Requires `OPENAI_API_KEY` and both models enabled in your OpenAI project
 
 **Limits:**
 
@@ -246,7 +253,7 @@ These are standalone actions on the same page: preview, download, and transcribe
 | ------ | ------------ | ------------- |
 | Preview | — | — |
 | Download | 15 minutes | 500 MB |
-| Transcribe | 15 minutes | 25 MB (downloaded audio; OpenAI Whisper API limit) |
+| Transcribe | 15 minutes | 25 MB (downloaded audio; OpenAI Audio API limit) |
 
 Step-specific error messages cover URL validation, download, file read, and transcription failures.
 
@@ -271,18 +278,23 @@ Step-specific error messages cover URL validation, download, file read, and tran
 | **Punctuation & formatting** | Basic | More natural, better capitalisation |
 | **Language support** | 57+ languages | 57+ languages |
 | **Price** | $0.006 / min | $0.006 / min |
-| **Project access required** | Standard (widely available) | Must be enabled in OpenAI project settings |
+| **Project access** | Must be enabled in OpenAI project settings | Must be enabled in OpenAI project settings |
 | **Best for** | General use, wide compatibility | Higher-quality transcripts where accuracy matters |
 
 ### Server / OpenAI (`/transcribe/server`)
 
 - Uploads audio to `POST /api/transcribe`
-- A model selector on the page lets you choose **Whisper 1** (`whisper-1`) or **GPT-4o Transcribe** (`gpt-4o-transcribe`) before transcribing; defaults to Whisper 1
+- A pill-style model selector lets you choose **Whisper 1** (`whisper-1`) or **GPT-4o Transcribe** (`gpt-4o-transcribe`) before transcribing; defaults to Whisper 1
+- A side-by-side comparison table on the page covers architecture, accuracy, punctuation, price, and access requirements to help you pick
 - Accepts [OpenAI audio input formats](https://platform.openai.com/docs/guides/speech-to-text): mp3, mp4, mpeg, mpga, m4a, wav, webm
 - Requires `OPENAI_API_KEY` in environment (local: `.env.local`, Vercel: Project Settings → Environment Variables)
 - Both models must be enabled in your OpenAI project (see [Enabling models](#enabling-models-in-your-openai-project))
 - File is sent to your server, then to OpenAI
 - Max file size: **25 MB**
+
+## In-app documentation (`/docs`)
+
+The full contents of this README are rendered as styled markdown at `/docs`. It is linked from the home page under the **More** section. The page is a Next.js server component that reads `README.md` from disk at render time — no build step required. Updating this file is sufficient to keep the in-app docs in sync.
 
 ## Validation
 
@@ -319,12 +331,121 @@ Server validation runs on YouTube API routes:
 
 Keep the tab open while transcription runs.
 
-## Deploying to Vercel
+## Deployment
 
-1. Deploy the Next.js app as usual.
-2. Add `OPENAI_API_KEY` in Vercel environment variables.
-3. On-device mode works without any server configuration.
-4. Server mode uses the API route; ensure your deployment platform/reverse proxy allows **25 MB** uploads.
+### Why Vercel is not suitable for this app
+
+Vercel's serverless architecture has several hard constraints that conflict with this app's requirements:
+
+| Constraint | Vercel Hobby | Impact |
+|---|---|---|
+| **Execution time limit** | 300 seconds hard cap | YouTube audio extraction + OpenAI transcription can take 30–120 s; no headroom for retries or slow networks |
+| **System binaries** | Cannot install arbitrary binaries | `yt-dlp` requires a real OS environment with Python 3.9+ on PATH — not available in Vercel's sandbox |
+| **Python runtime** | Separate function type, 500 MB bundle limit | `yt-dlp` + `ffmpeg` dependencies push against bundle limits and inflate cold-start time |
+| **Ephemeral filesystem** | Writable `/tmp` with constrained space | `yt-dlp` downloads audio to disk before passing it to OpenAI; tight `/tmp` space risks failures on larger files |
+| **Cold starts** | Every function invocation can cold-start | Long-running downloads are especially sensitive to startup overhead |
+
+**Bottom line:** on-device transcription (`/transcribe/on-device`) would work on Vercel since it runs entirely in the browser. Everything that touches `yt-dlp` — YouTube preview, download, and transcription — requires a persistent server process with a real OS, and is **not deployable on Vercel**.
+
+---
+
+### Recommended platforms
+
+#### 1. AWS Lightsail — best for budget simplicity
+
+A flat-rate virtual private server (VPS). You get full OS access, install Node, Python, and yt-dlp yourself, and there are no execution time limits.
+
+**Minimum recommended plan:** `$10/month` — 2 GB RAM, 2 vCPUs, 60 GB SSD, 3 TB transfer
+
+> The $5/month plan (1 GB RAM) can run the app at runtime but may struggle during `npm run build`. Build on the $10 plan and downgrade after, or build locally and deploy the output.
+
+**Why it fits this app:**
+- Full control over the OS — install `python3`, `yt-dlp`, `ffmpeg` with `apt`
+- No execution time limits — a 90-second YouTube extraction + transcription job completes without issue
+- Predictable flat monthly cost — no per-request billing surprises
+- Persistent filesystem — yt-dlp can write temp audio files without constraint
+
+**Trade-off:** You manage OS updates, Node version, and process management (e.g. PM2) yourself.
+
+**Quick setup sketch:**
+```bash
+# On the Lightsail instance
+sudo apt update && sudo apt install -y python3 python3-pip ffmpeg
+pip3 install yt-dlp
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+# clone repo, npm install, npm run build, pm2 start
+```
+
+---
+
+#### 2. Fly.io — best for container-native production
+
+Fly runs Docker containers on persistent micro-VMs globally. No execution time limits, full system dependency support via Dockerfile, and pay-per-use pricing.
+
+**Minimum realistic cost:** ~$10–15/month (1 shared vCPU, 1 GB RAM, 10 GB volume, dedicated IPv4)
+
+**Why it fits this app:**
+- Dockerfile installs `python3`, `yt-dlp`, and `ffmpeg` — no platform restrictions
+- No execution time limits on running containers
+- Persistent volumes for `/tmp` staging of yt-dlp downloads
+- Global regions — lower latency for international users
+
+**Trade-off:** Requires Docker knowledge. Root filesystem resets on redeploy — yt-dlp updates must go in the Dockerfile, not installed ad hoc.
+
+**Dockerfile addition needed:**
+```dockerfile
+RUN apt-get update && apt-get install -y python3 python3-pip ffmpeg \
+  && pip3 install yt-dlp
+```
+
+---
+
+#### 3. Render — best managed middle ground
+
+Render runs Docker-based web services with a simple Git-push deploy workflow. No execution time limits, full system dependency support, and no infrastructure management.
+
+**Minimum cost:** $7/month (Starter web service — 512 MB RAM, 0.5 CPU)
+
+> For comfortable operation use the **$25/month Standard plan** (2 GB RAM, 1 CPU) — the Starter plan may be tight under concurrent requests.
+
+**Why it fits this app:**
+- Docker support means yt-dlp + Python install exactly as on Lightsail
+- No execution time limits on standard services
+- Git-push deploys — simpler than managing a VPS
+- Built-in environment variable management, health checks, and auto-deploys
+
+**Trade-off:** More expensive than Lightsail for equivalent RAM. Free tier for static sites only — dynamic services require a paid plan.
+
+---
+
+### Platform comparison
+
+| | AWS Lightsail | Fly.io | Render |
+|---|---|---|---|
+| **Starting cost** | $10/month (recommended) | ~$10–15/month | $7–25/month |
+| **yt-dlp support** | ✅ Full (install via apt) | ✅ Full (Dockerfile) | ✅ Full (Dockerfile) |
+| **Execution time limit** | None | None | None |
+| **OS/binary access** | Full (SSH to server) | Full (via Dockerfile) | Full (via Dockerfile) |
+| **Deployment model** | Manual VPS (SSH + PM2) | Docker + `flyctl` CLI | Git push or Docker |
+| **Infra management** | You manage it | Minimal | None |
+| **Best for** | Budget, full control | Production, global edge | Simplest managed deploy |
+
+### Environment variables
+
+Whichever platform you use, set `OPENAI_API_KEY` as an environment variable (not in a committed file):
+
+```env
+OPENAI_API_KEY=sk-...
+```
+
+### Upload size
+
+Ensure your reverse proxy or load balancer allows at least **25 MB** request bodies. For nginx:
+
+```nginx
+client_max_body_size 30M;
+```
 
 ## Configuration notes
 
