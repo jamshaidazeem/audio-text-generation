@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { transcribeWithOpenAI } from "@/lib/transcribe-openai";
+import {
+  isValidOpenAITranscriptionModelId,
+} from "@/lib/models";
 import { MAX_SERVER_UPLOAD_BYTES } from "@/lib/upload-constants";
 import { validateAudioUpload } from "@/lib/validate-audio-upload";
 
@@ -37,8 +40,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
+  const rawModel = formData.get("model");
+  const model =
+    typeof rawModel === "string" && isValidOpenAITranscriptionModelId(rawModel)
+      ? rawModel
+      : "whisper-1";
+
   try {
-    const text = await transcribeWithOpenAI(file, apiKey);
+    const text = await transcribeWithOpenAI(file, apiKey, model);
     return NextResponse.json({ text });
   } catch (error) {
     const message =

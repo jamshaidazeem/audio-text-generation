@@ -1,6 +1,6 @@
 # Audio Text Generation
 
-A Next.js app for turning audio into text. Upload audio files or use a YouTube link to preview a video, download the file, or generate a transcript. Supports **on-device** transcription with Whisper Tiny ([Transformers.js](https://huggingface.co/docs/transformers.js)) or **server** transcription via the [OpenAI Whisper API](https://platform.openai.com/docs/guides/speech-to-text).
+A Next.js app for turning audio into text. Upload audio files or use a YouTube link to preview a video, download the file, or generate a transcript. Supports **on-device** transcription with Whisper Tiny ([Transformers.js](https://huggingface.co/docs/transformers.js)) or **server** transcription via the OpenAI Audio API — choose between **Whisper 1** and **GPT-4o Transcribe** for server-side jobs.
 
 ## Features
 
@@ -9,9 +9,10 @@ A Next.js app for turning audio into text. Upload audio files or use a YouTube l
 - **Per-model pages** — capabilities, pros, and cons for each backend, plus a dedicated upload UI
 - Audio file picker (mp3, mp4, mpeg, mpga, m4a, wav, webm)
 - Client-side validation for file type and size
-- **Two transcription models:**
+- **Three transcription backends:**
   - **On device** — Whisper Tiny in the browser (private, max **25 MB**)
-  - **Server (OpenAI)** — upload to API route, transcribed by OpenAI (max **25 MB**)
+  - **Server — Whisper 1** — upload to API route, transcribed by OpenAI `whisper-1` (max **25 MB**)
+  - **Server — GPT-4o Transcribe** — same pipeline using `gpt-4o-transcribe` for higher accuracy (max **25 MB**)
 - Background model preload in on-device mode
 - Progress bars for model download, upload, decode, and transcription
 - Web Worker inference for on-device mode
@@ -89,9 +90,23 @@ OPENAI_API_KEY=sk-...
 2. Open **Dashboard → API keys** (`platform.openai.com/api-keys`).
 3. Click **Create new secret key**, give it a name, and copy the value — it starts with `sk-`.
 4. Paste it into `.env.local` as `OPENAI_API_KEY=sk-...`.
-5. Make sure your account has a positive credit balance (**Settings → Billing**). Whisper API calls are pay-per-use; free-tier accounts must add a payment method.
+5. Make sure your account has a positive credit balance (**Settings → Billing**). Audio API calls are pay-per-use; free-tier accounts must add a payment method.
 
 The key is used server-side only (`POST /api/transcribe` and `POST /api/transcribe-youtube`). It is never sent to the browser.
+
+### Enabling models in your OpenAI project
+
+API keys belong to a **project**. Projects have an **allowed-models** list that controls which models the key can call. Both transcription models must be enabled.
+
+1. Open [platform.openai.com/settings](https://platform.openai.com/settings) and select your project from the left sidebar.
+2. Go to **Settings → Limits**.
+3. Under **Model usage → Allowed models**, click **Edit**.
+4. Search for and enable both:
+   - `whisper-1`
+   - `gpt-4o-transcribe`
+5. Save. Changes take effect immediately.
+
+> If `gpt-4o-transcribe` does not appear in the list, your organization tier may not have access yet. You can still use the app with `whisper-1` — the model selector on the server transcription and YouTube pages defaults to Whisper 1.
 
 ### What works with and without the key
 
@@ -107,16 +122,17 @@ The key is used server-side only (`POST /api/transcribe` and `POST /api/transcri
 
 ### Estimated API cost
 
-OpenAI charges for Whisper by the minute of audio processed (rounded up to the nearest second).
+OpenAI charges for audio transcription by the minute of audio processed (rounded up to the nearest second).
 
 | Model | Rate |
 | ----- | ---- |
 | `whisper-1` | **$0.006 / minute** |
+| `gpt-4o-transcribe` | **$0.006 / minute** |
 
 Typical examples at current pricing:
 
-| Audio length | Estimated cost |
-| ------------ | -------------- |
+| Audio length | Estimated cost (either model) |
+| ------------ | ----------------------------- |
 | 1 minute | ~$0.006 |
 | 5 minutes | ~$0.03 |
 | 10 minutes | ~$0.06 |
@@ -246,12 +262,25 @@ Step-specific error messages cover URL validation, download, file read, and tran
 - Accepts the same formats as server upload (mp3, mp4, mpeg, mpga, m4a, wav, webm); decoding uses the browser's `AudioContext` — **mp3** and **wav** are the most reliable if another format fails
 - Max file size: **25 MB**
 
+### OpenAI model comparison
+
+| | `whisper-1` | `gpt-4o-transcribe` |
+|--|-------------|---------------------|
+| **Architecture** | Whisper (encoder-decoder) | GPT-4o audio |
+| **Accuracy** | Good | Higher — better on accents, background noise, and technical vocabulary |
+| **Punctuation & formatting** | Basic | More natural, better capitalisation |
+| **Language support** | 57+ languages | 57+ languages |
+| **Price** | $0.006 / min | $0.006 / min |
+| **Project access required** | Standard (widely available) | Must be enabled in OpenAI project settings |
+| **Best for** | General use, wide compatibility | Higher-quality transcripts where accuracy matters |
+
 ### Server / OpenAI (`/transcribe/server`)
 
 - Uploads audio to `POST /api/transcribe`
-- Server calls OpenAI `whisper-1` and returns `{ text }`
-- Accepts [OpenAI Whisper input formats](https://platform.openai.com/docs/guides/speech-to-text): mp3, mp4, mpeg, mpga, m4a, wav, webm
+- A model selector on the page lets you choose **Whisper 1** (`whisper-1`) or **GPT-4o Transcribe** (`gpt-4o-transcribe`) before transcribing; defaults to Whisper 1
+- Accepts [OpenAI audio input formats](https://platform.openai.com/docs/guides/speech-to-text): mp3, mp4, mpeg, mpga, m4a, wav, webm
 - Requires `OPENAI_API_KEY` in environment (local: `.env.local`, Vercel: Project Settings → Environment Variables)
+- Both models must be enabled in your OpenAI project (see [Enabling models](#enabling-models-in-your-openai-project))
 - File is sent to your server, then to OpenAI
 - Max file size: **25 MB**
 

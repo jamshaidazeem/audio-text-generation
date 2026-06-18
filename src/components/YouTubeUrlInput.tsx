@@ -9,6 +9,7 @@ import { LabeledProgress } from "@/components/ui/LabeledProgress";
 import { TranscriptPanel } from "@/components/ui/TranscriptPanel";
 import { useYouTubeDownload } from "@/hooks/useYouTubeDownload";
 import { useYouTubeTranscription } from "@/hooks/useYouTubeTranscription";
+import { OPENAI_TRANSCRIPTION_MODELS, type OpenAITranscriptionModelId } from "@/lib/models";
 import {
   MAX_YOUTUBE_DURATION_LABEL,
   MAX_YOUTUBE_DURATION_SECONDS,
@@ -62,6 +63,7 @@ export function YouTubeUrlInput() {
   const [durationWarning, setDurationWarning] = useState<string | null>(null);
   const [durationBlocked, setDurationBlocked] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<OpenAITranscriptionModelId>("whisper-1");
 
   const transcription = useYouTubeTranscription();
   const download = useYouTubeDownload();
@@ -139,7 +141,7 @@ export function YouTubeUrlInput() {
   async function onTranscribe() {
     if (!videoId || isBusy || durationBlocked) return;
     clearValidationError();
-    await transcription.transcribe(videoId);
+    await transcription.transcribe(videoId, selectedModel);
   }
 
   async function onDownload() {
@@ -182,6 +184,37 @@ export function YouTubeUrlInput() {
           disabled={isBusy}
           className="w-full rounded-xl border border-black/8 bg-white px-4 py-2.5 text-sm text-black placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/[.145] dark:bg-black dark:text-zinc-50 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
         />
+      </div>
+
+      <div>
+        <fieldset>
+          <legend className="text-sm font-medium text-black dark:text-zinc-50">
+            Transcription model
+          </legend>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {OPENAI_TRANSCRIPTION_MODELS.map((m) => (
+              <label
+                key={m.id}
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                  selectedModel === m.id
+                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-black"
+                    : "border-black/8 text-zinc-700 hover:border-zinc-400 dark:border-white/[.145] dark:text-zinc-300 dark:hover:border-zinc-500"
+                } ${isBusy ? "cursor-not-allowed opacity-60" : ""}`}
+              >
+                <input
+                  type="radio"
+                  name="yt-transcription-model"
+                  value={m.id}
+                  checked={selectedModel === m.id}
+                  onChange={() => setSelectedModel(m.id)}
+                  disabled={isBusy}
+                  className="sr-only"
+                />
+                {m.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
       </div>
 
       <div className="flex flex-wrap gap-3">

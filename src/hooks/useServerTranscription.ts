@@ -30,7 +30,7 @@ export function useServerTranscription() {
     setError(null);
   }, []);
 
-  const transcribe = useCallback(async (file: File) => {
+  const transcribe = useCallback(async (file: File, model: string = "whisper-1") => {
     xhrRef.current?.abort();
 
     setError(null);
@@ -41,6 +41,7 @@ export function useServerTranscription() {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("model", model);
 
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { extractYouTubeAudio } from "@/lib/extract-youtube-audio";
+import { isValidOpenAITranscriptionModelId } from "@/lib/models";
 import { transcribeWithOpenAI } from "@/lib/transcribe-openai";
 import {
   isYouTubePipelineError,
@@ -53,6 +54,19 @@ export async function POST(request: Request) {
       ? body.videoId
       : null;
 
+  const rawModel =
+    typeof body === "object" &&
+    body !== null &&
+    "model" in body &&
+    typeof body.model === "string"
+      ? body.model
+      : null;
+
+  const model =
+    rawModel && isValidOpenAITranscriptionModelId(rawModel)
+      ? rawModel
+      : "whisper-1";
+
   if (!videoId) {
     return errorResponse("request", "A YouTube video ID is required.", 400);
   }
@@ -82,7 +96,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const text = await transcribeWithOpenAI(file, apiKey);
+    const text = await transcribeWithOpenAI(file, apiKey, model);
     return NextResponse.json({ text });
   } catch (error) {
     const mapped = mapOpenAITranscriptionError(error);

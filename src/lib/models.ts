@@ -81,6 +81,20 @@ export const MODELS: ModelConfig[] = [
   },
 ];
 
+export const OPENAI_TRANSCRIPTION_MODELS = [
+  { id: "whisper-1", label: "Whisper 1" },
+  { id: "gpt-4o-transcribe", label: "GPT-4o Transcribe" },
+] as const;
+
+export type OpenAITranscriptionModelId =
+  (typeof OPENAI_TRANSCRIPTION_MODELS)[number]["id"];
+
+export function isValidOpenAITranscriptionModelId(
+  id: string,
+): id is OpenAITranscriptionModelId {
+  return OPENAI_TRANSCRIPTION_MODELS.some((m) => m.id === id);
+}
+
 const MODEL_BY_ID = new Map(MODELS.map((model) => [model.id, model]));
 
 export function isValidModelId(id: string): id is ModelId {

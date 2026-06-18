@@ -41,7 +41,7 @@ export function useYouTubeTranscription() {
     setErrorStep(null);
   }, []);
 
-  const transcribe = useCallback(async (videoId: string) => {
+  const transcribe = useCallback(async (videoId: string, model: string = "whisper-1") => {
     abortRef.current?.abort();
 
     const controller = new AbortController();
@@ -57,7 +57,7 @@ export function useYouTubeTranscription() {
       const response = await fetch("/api/transcribe-youtube", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoId }),
+        body: JSON.stringify({ videoId, model }),
         signal: controller.signal,
       });
 

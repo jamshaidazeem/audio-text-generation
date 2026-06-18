@@ -12,6 +12,7 @@ import { TranscriptPanel } from "@/components/ui/TranscriptPanel";
 import { useServerTranscription } from "@/hooks/useServerTranscription";
 import { useWhisperTranscription } from "@/hooks/useWhisperTranscription";
 import { formatBytes } from "@/lib/format-bytes";
+import { OPENAI_TRANSCRIPTION_MODELS, type OpenAITranscriptionModelId } from "@/lib/models";
 import {
   MAX_SERVER_UPLOAD_BYTES,
   MAX_SERVER_UPLOAD_LABEL,
@@ -34,6 +35,7 @@ export function TranscriptionUploader({ mode }: TranscriptionUploaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<OpenAITranscriptionModelId>("whisper-1");
 
   const browserEnabled = mode === "browser";
   const maxLabel = browserEnabled ? MAX_UPLOAD_LABEL : MAX_SERVER_UPLOAD_LABEL;
@@ -94,7 +96,7 @@ export function TranscriptionUploader({ mode }: TranscriptionUploaderProps) {
     if (browserEnabled) {
       await browser.transcribe(file);
     } else {
-      await server.transcribe(file);
+      await server.transcribe(file, selectedModel);
     }
   }
 
@@ -121,6 +123,39 @@ export function TranscriptionUploader({ mode }: TranscriptionUploaderProps) {
         <span className="font-medium">{getSupportedFormatsLabel()}</span>; max{" "}
         <span className="font-medium">{maxLabel}</span>), then transcribe it.
       </p>
+
+      {!browserEnabled ? (
+        <div className="mt-4">
+          <fieldset>
+            <legend className="text-sm font-medium text-black dark:text-zinc-50">
+              Transcription model
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {OPENAI_TRANSCRIPTION_MODELS.map((m) => (
+                <label
+                  key={m.id}
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    selectedModel === m.id
+                      ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-black"
+                      : "border-black/8 text-zinc-700 hover:border-zinc-400 dark:border-white/[.145] dark:text-zinc-300 dark:hover:border-zinc-500"
+                  } ${isBusy ? "cursor-not-allowed opacity-60" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="transcription-model"
+                    value={m.id}
+                    checked={selectedModel === m.id}
+                    onChange={() => setSelectedModel(m.id)}
+                    disabled={isBusy}
+                    className="sr-only"
+                  />
+                  {m.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
